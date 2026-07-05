@@ -100,7 +100,7 @@ CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]
 
 Run:
 ```bash
-docker build -t asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform/notiflex-api:v0.1.0 app/
+docker build --platform linux/amd64 -t asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform/notiflex-api:v0.1.0 app/
 ```
 Expected: build completes successfully, ending with `Successfully tagged` (or the equivalent BuildKit "naming to ... done" output) — no errors in either stage.
 
