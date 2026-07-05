@@ -37,6 +37,24 @@
 - 네임스페이스: `notiflex` (생성 완료)
 - kubeconfig 파일 분리: 회사 AWS EKS 설정은 `~/.kube/config`에 그대로 두고, 이 GKE 클러스터는 `~/.kube/config-personal`로 분리. 쉘 프로필(`~/.zshrc`)에서 `export KUBECONFIG="$HOME/.kube/config:$HOME/.kube/config-personal"`로 두 파일을 병합해서 사용 (물리적으로는 분리, `kubectl`/`kubectx`에서는 하나로 보임). 다른 컴퓨터에서 작업할 경우 동일하게 `kubectl config view --minify --flatten --context=<원래 gcloud 컨텍스트명> > ~/.kube/config-personal` 후 원본에서 `kubectl config delete-context/-cluster/-user`로 제거하고 위 `KUBECONFIG` 설정을 추가할 것
 
+## 임시 중단/재개 (비용 절감)
+
+- 클러스터를 잠시 안 쓸 때는 삭제하지 않고 노드 풀을 0으로 리사이즈한다 (Deployment/Service 등 설정은 컨트롤 플레인에 남아 있으므로 재개 시 그대로 복원됨. Zonal 클러스터 1개는 관리비 무료 티어라 노드가 0이면 비용이 거의 없음).
+- **중단** (PDB가 노드 드레인을 막지 않도록 replicas를 먼저 0으로):
+  ```bash
+  kubectl --context notiflex-gke scale deployment notiflex-api -n notiflex --replicas=0
+  gcloud container clusters resize notiflex-cluster --node-pool default-pool \
+    --num-nodes 0 --zone asia-northeast3-a \
+    --project project-b3c5c78c-8a5c-4e47-9fe --quiet
+  ```
+- **재개**:
+  ```bash
+  gcloud container clusters resize notiflex-cluster --node-pool default-pool \
+    --num-nodes 2 --zone asia-northeast3-a \
+    --project project-b3c5c78c-8a5c-4e47-9fe --quiet
+  kubectl --context notiflex-gke scale deployment notiflex-api -n notiflex --replicas=2
+  ```
+
 ## 이미지 빌드
 
 - `app/Dockerfile`을 로컬 Docker가 아닌 **Cloud Build**로 빌드/push한다 (로컬 M-시리즈 맥은 arm64라 GKE 노드(amd64)와 아키텍처가 안 맞아 `--platform` 문제가 생기지만, Cloud Build는 GCP 서버(amd64)에서 빌드해 이 문제가 없음).
