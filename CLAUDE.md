@@ -33,8 +33,9 @@
 - 클러스터 이름: `notiflex-cluster` (Zonal, `asia-northeast3-a`)
 - 노드: e2-medium x 2 (Spot VM), 디스크 30GB
 - Gateway API: 활성화 (standard channel)
-- kubectl context: `notiflex-gke` (원래 이름 `gke_project-b3c5c78c-8a5c-4e47-9fe_asia-northeast3-a_notiflex-cluster`을 [kubectx](https://github.com/ahmetb/kubectx)로 별칭 지정. 이 컴퓨터에는 회사 AWS EKS 컨텍스트들도 같은 kubeconfig에 섞여 있어, 실수 방지를 위해 항상 이 별칭으로 `--context`를 명시한다. 다른 컴퓨터에서 작업할 경우 `kubectx notiflex-gke=gke_project-b3c5c78c-8a5c-4e47-9fe_asia-northeast3-a_notiflex-cluster`로 동일하게 별칭을 만들 것)
+- kubectl context: `notiflex-gke` (원래 이름 `gke_project-b3c5c78c-8a5c-4e47-9fe_asia-northeast3-a_notiflex-cluster`을 [kubectx](https://github.com/ahmetb/kubectx)로 별칭 지정)
 - 네임스페이스: `notiflex` (생성 완료)
+- kubeconfig 파일 분리: 회사 AWS EKS 설정은 `~/.kube/config`에 그대로 두고, 이 GKE 클러스터는 `~/.kube/config-personal`로 분리. 쉘 프로필(`~/.zshrc`)에서 `export KUBECONFIG="$HOME/.kube/config:$HOME/.kube/config-personal"`로 두 파일을 병합해서 사용 (물리적으로는 분리, `kubectl`/`kubectx`에서는 하나로 보임). 다른 컴퓨터에서 작업할 경우 동일하게 `kubectl config view --minify --flatten --context=<원래 gcloud 컨텍스트명> > ~/.kube/config-personal` 후 원본에서 `kubectl config delete-context/-cluster/-user`로 제거하고 위 `KUBECONFIG` 설정을 추가할 것
 
 ## 행동 규칙
 
