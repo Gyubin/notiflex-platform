@@ -4,12 +4,13 @@
 
 ## 프로젝트 개요
 
-- notiflex-platform: Go로 작성되는 백엔드 서비스
+- notiflex-platform: Python으로 작성되는 백엔드 서비스
 - Kubernetes(K8s)에 배포되며, Docker 이미지는 GCP Artifact Registry에 저장
+- 참고: 원본 교재는 Go 기준으로 작성되어 있음. 이 저장소는 Python으로 대체해서 진행 중이므로, 교재의 Go 코드/설정을 볼 때는 Python으로 옮겨서 구현한다.
 
 ## 디렉토리 구조
 
-- `app/` — Go 소스 코드
+- `app/` — Python 소스 코드
 - `k8s/smb/` — K8s 매니페스트 (배포, 서비스 등)
 - `.github/workflows/` — CI 파이프라인
 

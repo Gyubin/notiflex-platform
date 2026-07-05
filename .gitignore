@@ -19,11 +19,16 @@ credentials.json
 # Logs
 *.log
 
-# Go build output
-/app/bin/
-*.exe
-*.test
-*.out
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Build output
 dist/
