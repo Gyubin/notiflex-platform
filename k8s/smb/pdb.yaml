@@ -1,0 +1,10 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: notiflex-api
+  namespace: notiflex
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: notiflex-api
