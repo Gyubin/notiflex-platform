@@ -15,7 +15,7 @@ spec:
     spec:
       containers:
         - name: notiflex-api
-          image: asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform/notiflex-api:v0.1.0
+          image: asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform/notiflex-api:v0.1.1
           ports:
             - containerPort: 8080
           env:
@@ -46,3 +46,21 @@ spec:
             runAsNonRoot: true
             runAsUser: 1000
             readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      # Spot VM 노드라 preemption 후 재스케줄링 시 한 노드에 몰리는 것을 방지
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app: notiflex-api
+          # 같은 리비전(pod-template-hash) 기준으로만 스큐를 계산해,
+          # 롤링 업데이트 중 종료되는 구 Pod 때문에 새 Pod가 한 노드에 몰리는 것을 방지
+          matchLabelKeys:
+            - pod-template-hash
