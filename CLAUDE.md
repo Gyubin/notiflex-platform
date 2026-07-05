@@ -28,13 +28,21 @@
 - Zone: `asia-northeast3-a`
 - Artifact Registry: `asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform`
 
+## GKE 클러스터
+
+- 클러스터 이름: `notiflex-cluster` (Zonal, `asia-northeast3-a`)
+- 노드: e2-medium x 2 (Spot VM), 디스크 30GB
+- Gateway API: 활성화 (standard channel)
+- kubectl context: `gke_project-b3c5c78c-8a5c-4e47-9fe_asia-northeast3-a_notiflex-cluster`
+- 네임스페이스: `notiflex` (생성 완료)
+
 ## 행동 규칙
 
 1. 명령 실행 전 현재 상태를 확인한다 (`kubectl get`, `gcloud config list` 등).
 2. 파일 변경 전 기존 내용을 먼저 읽는다.
 3. 에러 발생 시 원인을 분석하고 해결 방안을 제시한 뒤 진행한다.
 4. 매니페스트 작성 시 네임스페이스(`notiflex`)를 명시한다.
-5. **모든 `kubectl` 명령에 `--context <클러스터 컨텍스트>`를 반드시 지정한다** (잘못된 클러스터 대상 실행 방지). ⚠️ GKE 클러스터 생성 후 실제 컨텍스트 이름으로 교체할 것 — 아직 미확정: `--context TODO`
+5. **모든 `kubectl` 명령에 `--context gke_project-b3c5c78c-8a5c-4e47-9fe_asia-northeast3-a_notiflex-cluster`를 반드시 지정한다** (잘못된 클러스터 대상 실행 방지).
 6. 리소스 생성/삭제 전에는 영향 범위를 먼저 설명한다.
 7. 이미지 태그는 `latest`를 쓰지 않고 명시적 버전(`v0.1.0` 등)을 사용한다.
 8. 자격 증명(서비스 계정 키, API 키, 토큰, 비밀번호 등)은 코드나 매니페스트에 하드코딩하지 않는다 (환경변수, GitHub Secrets, Secret Manager 사용).
