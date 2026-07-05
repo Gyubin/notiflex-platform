@@ -17,7 +17,8 @@ def test_id_increments_between_calls():
     assert second == first + 1
 
 
-def test_id_returns_pod_field_default_local():
+def test_id_returns_pod_field_default_local(monkeypatch):
+    monkeypatch.delenv("POD_NAME", raising=False)
     response = client.get("/id")
     assert response.status_code == 200
     assert response.json()["pod"] == "local"
