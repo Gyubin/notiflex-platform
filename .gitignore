@@ -11,9 +11,19 @@ Thumbs.db
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+service-account*.json
+credentials.json
 
 # Logs
 *.log
+
+# Go build output
+/app/bin/
+*.exe
+*.test
+*.out
 
 # Build output
 dist/
