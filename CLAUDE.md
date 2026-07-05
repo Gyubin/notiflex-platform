@@ -37,6 +37,20 @@
 - 네임스페이스: `notiflex` (생성 완료)
 - kubeconfig 파일 분리: 회사 AWS EKS 설정은 `~/.kube/config`에 그대로 두고, 이 GKE 클러스터는 `~/.kube/config-personal`로 분리. 쉘 프로필(`~/.zshrc`)에서 `export KUBECONFIG="$HOME/.kube/config:$HOME/.kube/config-personal"`로 두 파일을 병합해서 사용 (물리적으로는 분리, `kubectl`/`kubectx`에서는 하나로 보임). 다른 컴퓨터에서 작업할 경우 동일하게 `kubectl config view --minify --flatten --context=<원래 gcloud 컨텍스트명> > ~/.kube/config-personal` 후 원본에서 `kubectl config delete-context/-cluster/-user`로 제거하고 위 `KUBECONFIG` 설정을 추가할 것
 
+## 이미지 빌드
+
+- `app/Dockerfile`을 로컬 Docker가 아닌 **Cloud Build**로 빌드/push한다 (로컬 M-시리즈 맥은 arm64라 GKE 노드(amd64)와 아키텍처가 안 맞아 `--platform` 문제가 생기지만, Cloud Build는 GCP 서버(amd64)에서 빌드해 이 문제가 없음).
+- 전용 서비스 계정 `notiflex-cloudbuild@project-b3c5c78c-8a5c-4e47-9fe.iam.gserviceaccount.com`(`roles/cloudbuild.builds.builder`)을 사용한다. Compute Engine 기본 서비스 계정은 권한이 없어 그대로 쓰면 실패한다.
+- 빌드 커맨드:
+  ```bash
+  gcloud builds submit app/ \
+    --tag=asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform/notiflex-api:v0.1.0 \
+    --service-account=projects/project-b3c5c78c-8a5c-4e47-9fe/serviceAccounts/notiflex-cloudbuild@project-b3c5c78c-8a5c-4e47-9fe.iam.gserviceaccount.com \
+    --default-buckets-behavior=REGIONAL_USER_OWNED_BUCKET
+  ```
+  (`--default-buckets-behavior`는 사용자 지정 서비스 계정을 쓸 때 로그 저장 위치를 명시하기 위해 필수)
+- `app/.gcloudignore`로 `.venv/`, `__pycache__/` 등을 업로드 대상에서 제외한다.
+
 ## 행동 규칙
 
 1. 명령 실행 전 현재 상태를 확인한다 (`kubectl get`, `gcloud config list` 등).
