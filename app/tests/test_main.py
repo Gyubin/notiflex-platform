@@ -11,6 +11,14 @@ def test_health_returns_ok():
     assert response.json() == {"status": "ok"}
 
 
+def test_version_returns_app_version():
+    from main import APP_VERSION
+
+    response = client.get("/version")
+    assert response.status_code == 200
+    assert response.json() == {"version": APP_VERSION}
+
+
 def test_id_increments_between_calls():
     first = client.get("/id").json()["id"]
     second = client.get("/id").json()["id"]

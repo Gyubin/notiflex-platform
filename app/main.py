@@ -6,12 +6,18 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
+APP_VERSION = "v0.1.2"
+
 _counter_lock = threading.Lock()
 _counter = 0
 
 
 class HealthResponse(BaseModel):
     status: str
+
+
+class VersionResponse(BaseModel):
+    version: str
 
 
 class IdResponse(BaseModel):
@@ -22,6 +28,11 @@ class IdResponse(BaseModel):
 @app.get("/health", response_model=HealthResponse)
 def health() -> HealthResponse:
     return HealthResponse(status="ok")
+
+
+@app.get("/version", response_model=VersionResponse)
+def version() -> VersionResponse:
+    return VersionResponse(version=APP_VERSION)
 
 
 @app.get("/id", response_model=IdResponse)
