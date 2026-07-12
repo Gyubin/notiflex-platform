@@ -9,6 +9,10 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    # WIF: OIDC 토큰 발급을 위해 id-token: write 필요
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -23,10 +27,13 @@ jobs:
           uv sync --frozen
           uv run pytest -q
 
-      - name: Authenticate to GCP
+      # 키리스 인증: GitHub OIDC 토큰을 WIF로 교환해 notiflex-ci SA로 행세 (저장된 키 없음)
+      - name: Authenticate to GCP (Workload Identity Federation)
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.GCP_SA_KEY }}
+          project_id: project-b3c5c78c-8a5c-4e47-9fe
+          workload_identity_provider: projects/670399378426/locations/global/workloadIdentityPools/gh-pool/providers/github
+          service_account: notiflex-ci@project-b3c5c78c-8a5c-4e47-9fe.iam.gserviceaccount.com
 
       - name: Set up gcloud
         uses: google-github-actions/setup-gcloud@v2
