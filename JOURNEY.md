@@ -17,7 +17,7 @@
 | ch3 | 3.2 GitOps 도구 | ✅ | 2026-07-12 | ArgoCD v3.4.5 설치. Application `notiflex-smb`(k8s/smb, automated/prune/selfHeal). 노드 풀 0→2 재개 후 selfHeal이 파드 자동 복구 |
 | ch3 | 3.3 기능 추가 | ✅ | 2026-07-12 | `/version`(앱 버전+런타임+Pod명) 추가, 로컬 uv 전환+Dockerfile uv 통일하며 v0.1.4까지. git push→ArgoCD 롤링 배포, git revert 롤백/롤포워드까지 검증 |
 | ch3 | 3.4 CI | ✅ | 2026-07-12 | GitHub Actions, 릴리스 태그(v*) 트리거, WIF 키리스 인증. uv 테스트→docker build→push. v0.1.5 빌드/푸시 (배포는 3.5) |
-| ch3 | 3.5 CI-CD 연결 | ⬜ | | |
+| ch3 | 3.5 CI-CD 연결 | ✅ | 2026-07-12 | CI가 빌드 후 deployment.yaml 태그 갱신→main push→ArgoCD 자동 배포. `git tag v0.1.6` 한 번으로 v0.1.4→v0.1.6 E2E 검증 |
 | ch4 | 4.2 메트릭 모니터링 | ⬜ | | |
 | ch4 | 4.3 로그 수집 | ⬜ | | |
 | ch4 | 4.4 알림 | ⬜ | | |
@@ -58,7 +58,7 @@
 | Python | 3.13 | 2026-07-12 로컬 uv 전환하며 이미지(python:3.13-slim)에 맞춰 3.14→3.13 정합 |
 | FastAPI | 0.139.0 | |
 | uvicorn | 0.50.0 | |
-| Notiflex 이미지 | v0.1.4 | 2026-07-12 /version 추가·보강 + uv 기반 Dockerfile (v0.1.1→…→v0.1.4) |
+| Notiflex 이미지 | v0.1.6 | 2026-07-12 CI 자동 빌드/배포 릴리스 (v0.1.1→…→v0.1.6). v0.1.6은 CI가 태그 트리거로 빌드·배포 |
 | ArgoCD | v3.4.5 | 2026-07-12 설치 (stable manifest) |
 | Kafka | (미설치) | |
 | OTel SDK | (미설치) | |
