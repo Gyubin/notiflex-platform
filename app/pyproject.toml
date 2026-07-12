@@ -1,0 +1,19 @@
+[project]
+name = "notiflex-api"
+version = "0.1.4"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "fastapi==0.139.0",
+    "uvicorn==0.50.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "httpx",
+]
+
+[tool.uv]
+# 라이브러리가 아니라 애플리케이션이므로 프로젝트 자체는 빌드/설치하지 않는다.
+# main.py는 이미지에서 WORKDIR로 복사해 uvicorn이 직접 임포트한다.
+package = false

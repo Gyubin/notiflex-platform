@@ -7,7 +7,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-APP_VERSION = "v0.1.3"
+APP_VERSION = "v0.1.4"
 
 _counter_lock = threading.Lock()
 _counter = 0

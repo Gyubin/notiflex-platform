@@ -15,7 +15,7 @@
 | ch2 | 2.6 빌드/배포 | ✅ | 2026-07-07 | 소급 기록. FastAPI 앱, Cloud Build로 v0.1.0 빌드/배포 |
 | ch2 | 2.7 첫 커밋 | ✅ | 2026-07-07 | 소급 기록. Deployment/Service/PDB 매니페스트 포함 |
 | ch3 | 3.2 GitOps 도구 | ✅ | 2026-07-12 | ArgoCD v3.4.5 설치. Application `notiflex-smb`(k8s/smb, automated/prune/selfHeal). 노드 풀 0→2 재개 후 selfHeal이 파드 자동 복구 |
-| ch3 | 3.3 기능 추가 | ✅ | 2026-07-12 | `/version` 엔드포인트 추가, v0.1.2 빌드/푸시. git push → ArgoCD 롤링 업데이트로 무중단 교체 확인 |
+| ch3 | 3.3 기능 추가 | ✅ | 2026-07-12 | `/version` 엔드포인트(앱 버전+런타임+Pod명) 추가, v0.1.3 빌드/푸시. git push → ArgoCD 롤링 업데이트로 무중단 교체 확인 |
 | ch3 | 3.4 CI | ⬜ | | |
 | ch3 | 3.5 CI-CD 연결 | ⬜ | | |
 | ch4 | 4.2 메트릭 모니터링 | ⬜ | | |
@@ -47,15 +47,16 @@
 | 앱 언어 | Python (FastAPI + uvicorn) | Go (교재 기준) | Python 학습 목적으로 교재의 Go 스택을 대체 |
 | 이미지 빌드 | Cloud Build | 로컬 docker build | M-시리즈 맥(arm64)과 GKE 노드(amd64) 아키텍처 불일치 회피 |
 | GitOps 도구 | ArgoCD | Flux | UI/App of Apps 등 교재 진행 흐름과 정합, 선언적 Application으로 selfHeal 복구 |
+| 로컬 의존성 관리 | uv (pyproject.toml + uv.lock) | pip + requirements.txt, .venv(3.14) | dev/운영 Python·의존성 정합(둘 다 3.13, uv.lock으로 하위 의존성까지 잠금), Dockerfile도 uv 통일 |
 
 ## 현재 버전
 
 | 컴포넌트 | 버전 | 변경 이력 |
 |---------|------|----------|
-| Python | 3.14 | |
+| Python | 3.13 | 2026-07-12 로컬 uv 전환하며 이미지(python:3.13-slim)에 맞춰 3.14→3.13 정합 |
 | FastAPI | 0.139.0 | |
 | uvicorn | 0.50.0 | |
-| Notiflex 이미지 | v0.1.2 | 2026-07-12 /version 추가 (v0.1.1→v0.1.2) |
+| Notiflex 이미지 | v0.1.4 | 2026-07-12 /version 추가·보강 + uv 기반 Dockerfile (v0.1.1→…→v0.1.4) |
 | ArgoCD | v3.4.5 | 2026-07-12 설치 (stable manifest) |
 | Kafka | (미설치) | |
 | OTel SDK | (미설치) | |
