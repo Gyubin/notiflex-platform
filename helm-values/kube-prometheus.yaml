@@ -1,0 +1,64 @@
+# kube-prometheus-stack values — Notiflex (e2-medium ×2, 리소스 빠듯)
+# 가드레일: prompt-guardrails/ch4/4.2-prometheus-grafana.md
+# e2-medium 노드 allocatable ~940m/노드라 requests를 최소화한다.
+# 학습 클러스터이므로 메트릭은 emptyDir(재시작 시 소실)로 저장한다.
+
+# --- Prometheus ---
+prometheus:
+  prometheusSpec:
+    retention: 2d                    # 장기 저장 불필요, 디스크/메모리 절약
+    resources:
+      requests:
+        cpu: 100m
+        memory: 256Mi
+      limits:
+        memory: 512Mi
+    # PVC 없이 emptyDir 사용 (storageSpec 미지정 시 기본 emptyDir)
+
+# --- Grafana ---
+grafana:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  persistence:
+    enabled: false                   # emptyDir, 대시보드는 ConfigMap으로 프로비저닝
+
+# --- Alertmanager ---
+alertmanager:
+  alertmanagerSpec:
+    resources:
+      requests:
+        cpu: 25m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+# --- Prometheus Operator ---
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 25m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
+
+# --- kube-state-metrics ---
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+
+# --- node-exporter (DaemonSet, 노드당 1개) ---
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 5m
+      memory: 16Mi
+    limits:
+      memory: 32Mi

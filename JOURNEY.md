@@ -18,7 +18,7 @@
 | ch3 | 3.3 기능 추가 | ✅ | 2026-07-12 | `/version`(앱 버전+런타임+Pod명) 추가, 로컬 uv 전환+Dockerfile uv 통일하며 v0.1.4까지. git push→ArgoCD 롤링 배포, git revert 롤백/롤포워드까지 검증 |
 | ch3 | 3.4 CI | ✅ | 2026-07-12 | GitHub Actions, 릴리스 태그(v*) 트리거, WIF 키리스 인증. uv 테스트→docker build→push. v0.1.5 빌드/푸시 (배포는 3.5) |
 | ch3 | 3.5 CI-CD 연결 | ✅ | 2026-07-12 | CI가 빌드 후 deployment.yaml 태그 갱신→main push→ArgoCD 자동 배포. `git tag v0.1.6` 한 번으로 v0.1.4→v0.1.6 E2E 검증 |
-| ch4 | 4.2 메트릭 모니터링 | ⬜ | | |
+| ch4 | 4.2 메트릭 모니터링 | ✅ | 2026-07-12 | kube-prometheus-stack 87.15.1(Helm) 설치. monitoring 네임스페이스, 파드 7개 Running. Prometheus 타깃 16/18 up(down 2개는 GKE 관리형 CM/scheduler라 정상). requests 최소화(Prom 100m/Graf 50m/AM 25m). Grafana 접속·Notiflex 대시보드는 후속 |
 | ch4 | 4.3 로그 수집 | ⬜ | | |
 | ch4 | 4.4 알림 | ⬜ | | |
 | ch5 | 5.2 트래픽 관리 | ⬜ | | |
@@ -50,6 +50,7 @@
 | 로컬 의존성 관리 | uv (pyproject.toml + uv.lock) | pip + requirements.txt, .venv(3.14) | dev/운영 Python·의존성 정합(둘 다 3.13, uv.lock으로 하위 의존성까지 잠금), Dockerfile도 uv 통일 |
 | CI 도구 | GitHub Actions | Cloud Build, Jenkins, GitLab CI | GitHub 네이티브, YAML 한 파일. 릴리스 태그(v*) 트리거 + git 태그를 이미지 태그/APP_VERSION으로 주입 |
 | CI 인증 | Workload Identity Federation (키리스) | SA 키 + GitHub Secrets | 조직 정책(iam.disableServiceAccountKeyCreation)으로 SA 키 금지 → OIDC 교환, 저장 키 없음 |
+| 메트릭 모니터링 | Prometheus + Grafana (kube-prometheus-stack) | Datadog, CloudWatch, GCP Monitoring | 오픈소스 K8s 표준(CNCF), 무료 자체 호스팅, Helm 번들로 6개 컴포넌트 일괄 설치, 이후 Loki/Tempo와 Grafana로 통합 |
 
 ## 현재 버전
 
@@ -60,6 +61,7 @@
 | uvicorn | 0.50.0 | |
 | Notiflex 이미지 | v0.1.6 | 2026-07-12 CI 자동 빌드/배포 릴리스 (v0.1.1→…→v0.1.6). v0.1.6은 CI가 태그 트리거로 빌드·배포 |
 | ArgoCD | v3.4.5 | 2026-07-12 설치 (stable manifest) |
+| kube-prometheus-stack | 87.15.1 (Helm) | 2026-07-12 설치. Prometheus v3.13.1, Grafana 13.1.0, operator v0.92.1 |
 | Kafka | (미설치) | |
 | OTel SDK | (미설치) | |
 
@@ -81,3 +83,6 @@
 | ch2 | 노드 풀 0으로 중단 시 PDB가 노드 드레인을 차단 | 리사이즈 전에 Deployment replicas를 먼저 0으로 축소 |
 | ch3 | 재개 후 auto-sync 재활성화해도 selfHeal이 바로 안 돎 | Application에 `argocd.argoproj.io/refresh=hard` 어노테이션으로 즉시 sync 트리거 |
 | ch3 | CI용 SA 키 생성이 조직 정책(개인 org의 secure-by-default)으로 차단 | SA 키 대신 WIF(키리스)로 전환 |
+| ch4 | helm이 미설치 상태 | `brew install helm` (v4.2.3) |
+| ch4 | helm install이 auto 모드 분류기에 차단(node-exporter가 전클러스터 DaemonSet 생성) | 개인 학습 클러스터임을 확인하고 전체 스택 설치로 진행(사용자 승인) |
+| ch4 | 설치 후 node1 CPU requests 93%(e2-medium allocatable ~940m/노드) | 정상 기동. 예산표대로 ch6 진입 전 관측 스택 requests를 5m으로 선제 축소 필요 |

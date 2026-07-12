@@ -3,6 +3,8 @@ kind: Service
 metadata:
   name: notiflex-api
   namespace: notiflex
+  labels:
+    app: notiflex-api          # ServiceMonitor가 이 라벨로 Service를 선택한다
 spec:
   type: ClusterIP
   selector:

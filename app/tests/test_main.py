@@ -45,3 +45,13 @@ def test_id_returns_pod_name_from_env(monkeypatch):
     monkeypatch.setenv("POD_NAME", "notiflex-abc123")
     response = client.get("/id")
     assert response.json()["pod"] == "notiflex-abc123"
+
+
+def test_metrics_endpoint_exposes_prometheus_format():
+    # 한 번 요청을 발생시켜 카운터가 증가하도록 한 뒤 /metrics를 조회한다.
+    client.get("/health")
+    response = client.get("/metrics")
+    assert response.status_code == 200
+    body = response.text
+    # prometheus-fastapi-instrumentator 기본 히스토그램 계측 노출 확인
+    assert "http_request_duration_seconds" in body

@@ -1,0 +1,20 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: notiflex-api
+  namespace: notiflex
+  labels:
+    # kube-prometheus-stack의 Prometheus는 serviceMonitorSelector로
+    # release=kube-prometheus 라벨이 붙은 ServiceMonitor만 채택한다.
+    release: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app: notiflex-api
+  namespaceSelector:
+    matchNames:
+      - notiflex
+  endpoints:
+    - port: http          # Service의 포트 이름(http, 8080)
+      path: /metrics
+      interval: 30s
