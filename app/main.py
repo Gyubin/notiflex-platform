@@ -1,4 +1,5 @@
 import os
+import platform
 import threading
 
 from fastapi import FastAPI
@@ -6,7 +7,7 @@ from pydantic import BaseModel
 
 app = FastAPI()
 
-APP_VERSION = "v0.1.2"
+APP_VERSION = "v0.1.3"
 
 _counter_lock = threading.Lock()
 _counter = 0
@@ -18,6 +19,8 @@ class HealthResponse(BaseModel):
 
 class VersionResponse(BaseModel):
     version: str
+    runtime: str
+    pod: str
 
 
 class IdResponse(BaseModel):
@@ -32,7 +35,12 @@ def health() -> HealthResponse:
 
 @app.get("/version", response_model=VersionResponse)
 def version() -> VersionResponse:
-    return VersionResponse(version=APP_VERSION)
+    pod_name = os.environ.get("POD_NAME", "local")
+    return VersionResponse(
+        version=APP_VERSION,
+        runtime=f"python {platform.python_version()}",
+        pod=pod_name,
+    )
 
 
 @app.get("/id", response_model=IdResponse)

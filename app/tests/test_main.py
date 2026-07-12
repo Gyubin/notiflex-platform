@@ -16,7 +16,16 @@ def test_version_returns_app_version():
 
     response = client.get("/version")
     assert response.status_code == 200
-    assert response.json() == {"version": APP_VERSION}
+    body = response.json()
+    assert body["version"] == APP_VERSION
+    assert body["runtime"].startswith("python ")
+    assert "pod" in body
+
+
+def test_version_returns_pod_name_from_env(monkeypatch):
+    monkeypatch.setenv("POD_NAME", "notiflex-xyz789")
+    response = client.get("/version")
+    assert response.json()["pod"] == "notiflex-xyz789"
 
 
 def test_id_increments_between_calls():
