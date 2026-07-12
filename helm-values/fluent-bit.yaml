@@ -1,0 +1,26 @@
+# Fluent Bit values — Notiflex (grafana/fluent-bit, DaemonSet)
+# 가드레일: prompt-guardrails/ch4/4.3-loki-fluentbit.md
+# 모든 노드의 컨테이너 로그를 수집해 Loki로 전송한다.
+
+loki:
+  serviceName: loki                 # Loki 서비스 이름 (기본값 "<release>-loki"이라 명시 필수)
+  servicePort: 3100
+  serviceScheme: http
+  servicePath: /loki/api/v1/push    # Loki 3.x push API (기본값 /api/prom/push는 구버전이라 404)
+
+config:
+  loglevel: warn
+  lineFormat: json
+  # kubernetes 메타데이터를 Loki 라벨로 매핑 (namespace_name -> namespace 등, 차트 기본값 유지)
+
+# e2-medium 노드가 빠듯하므로 기본 100m에서 축소
+resources:
+  requests:
+    cpu: 5m
+    memory: 32Mi
+  limits:
+    memory: 64Mi
+
+rbac:
+  create: true
+  pspEnabled: false                 # PodSecurityPolicy는 k8s 1.25+에서 제거됨 (클러스터 1.35)

@@ -1,0 +1,75 @@
+# Loki values — Notiflex (e2-medium, 리소스 최소화)
+# 가드레일: prompt-guardrails/ch4/4.3-loki-fluentbit.md
+# SingleBinary 모드 + 파일시스템 스토리지. 학습용이라 영속 스토리지/캐시는 끈다.
+
+deploymentMode: SingleBinary
+
+loki:
+  auth_enabled: false
+  # 최신 chart는 schema_config 명시를 요구. useTestSchema가 기본 schema를 자동 생성한다.
+  # (없으면 Loki Pod이 기동 즉시 CrashLoopBackOff)
+  useTestSchema: true
+  commonConfig:
+    replication_factor: 1
+  storage:
+    type: filesystem
+    # 최신 chart 필수: 없으면 "Please define loki.storage.bucketNames.chunks" 에러
+    bucketNames:
+      chunks: chunks
+      ruler: ruler
+      admin: admin
+  limits_config:
+    retention_period: 24h
+    reject_old_samples: false
+
+singleBinary:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 10m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  persistence:
+    # Loki는 filesystem 스토리지에 /var/loki 쓰기가 필요하다. 루트 FS가 읽기 전용이라
+    # 볼륨이 없으면 "mkdir /var/loki: read-only file system"으로 CrashLoop.
+    # 학습용 소형 PVC(GKE 기본 storageclass, 삭제 시 자동 정리).
+    enabled: true
+    size: 2Gi
+
+# 분산 모드 컴포넌트 비활성 (SingleBinary만 사용)
+read:
+  replicas: 0
+write:
+  replicas: 0
+backend:
+  replicas: 0
+
+# memcached 캐시는 기본값이 수백 Mi를 요구 → e2-medium에서 필수 비활성
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# 게이트웨이(nginx) 불필요 → 직접 loki 서비스(3100)로 접근
+gateway:
+  enabled: false
+
+# 셀프모니터링/카나리/테스트 비활성 (추가 리소스 절약)
+monitoring:
+  selfMonitoring:
+    enabled: false
+    grafanaAgent:
+      installOperator: false
+  lokiCanary:
+    enabled: false
+  dashboards:
+    enabled: false
+  rules:
+    enabled: false
+  serviceMonitor:
+    enabled: false
+test:
+  enabled: false
+lokiCanary:
+  enabled: false

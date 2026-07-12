@@ -18,8 +18,8 @@
 | ch3 | 3.3 기능 추가 | ✅ | 2026-07-12 | `/version`(앱 버전+런타임+Pod명) 추가, 로컬 uv 전환+Dockerfile uv 통일하며 v0.1.4까지. git push→ArgoCD 롤링 배포, git revert 롤백/롤포워드까지 검증 |
 | ch3 | 3.4 CI | ✅ | 2026-07-12 | GitHub Actions, 릴리스 태그(v*) 트리거, WIF 키리스 인증. uv 테스트→docker build→push. v0.1.5 빌드/푸시 (배포는 3.5) |
 | ch3 | 3.5 CI-CD 연결 | ✅ | 2026-07-12 | CI가 빌드 후 deployment.yaml 태그 갱신→main push→ArgoCD 자동 배포. `git tag v0.1.6` 한 번으로 v0.1.4→v0.1.6 E2E 검증 |
-| ch4 | 4.2 메트릭 모니터링 | ✅ | 2026-07-12 | kube-prometheus-stack 87.15.1(Helm) 설치. monitoring 네임스페이스, 파드 7개 Running. Prometheus 타깃 16/18 up(down 2개는 GKE 관리형 CM/scheduler라 정상). requests 최소화(Prom 100m/Graf 50m/AM 25m). Grafana 접속·Notiflex 대시보드는 후속 |
-| ch4 | 4.3 로그 수집 | ⬜ | | |
+| ch4 | 4.2 메트릭 모니터링 | ✅ | 2026-07-12 | kube-prometheus-stack 87.15.1(Helm) 설치, 파드 7개 Running. 앱에 prometheus-fastapi-instrumentator 계측(/metrics, http_requests_total) 추가→v0.1.7 릴리스. ServiceMonitor(notiflex)로 스크레이프(타깃 2/2 UP). Grafana 대시보드 ConfigMap(CPU/메모리/HTTP요청/재시작) 사이드카 자동 임포트 완료 |
+| ch4 | 4.3 로그 수집 | ✅ | 2026-07-12 | Loki(SingleBinary, 2Gi PVC) + Fluent Bit(DaemonSet 2/2) 설치. Grafana Loki 데이터소스 자동 등록(isDefault:false). `{namespace="notiflex"}`로 앱 로그 조회 확인. 캐시/게이트웨이/셀프모니터링 비활성으로 리소스 최소화 |
 | ch4 | 4.4 알림 | ⬜ | | |
 | ch5 | 5.2 트래픽 관리 | ⬜ | | |
 | ch5 | 5.3 무중단 배포 | ⬜ | | |
@@ -51,6 +51,7 @@
 | CI 도구 | GitHub Actions | Cloud Build, Jenkins, GitLab CI | GitHub 네이티브, YAML 한 파일. 릴리스 태그(v*) 트리거 + git 태그를 이미지 태그/APP_VERSION으로 주입 |
 | CI 인증 | Workload Identity Federation (키리스) | SA 키 + GitHub Secrets | 조직 정책(iam.disableServiceAccountKeyCreation)으로 SA 키 금지 → OIDC 교환, 저장 키 없음 |
 | 메트릭 모니터링 | Prometheus + Grafana (kube-prometheus-stack) | Datadog, CloudWatch, GCP Monitoring | 오픈소스 K8s 표준(CNCF), 무료 자체 호스팅, Helm 번들로 6개 컴포넌트 일괄 설치, 이후 Loki/Tempo와 Grafana로 통합 |
+| 로그 수집 | Loki + Fluent Bit | ELK Stack, CloudWatch, GCP Logging | 경량(Loki 128Mi vs ELK 2Gi+, e2-medium에 ELK 불가), Grafana 네이티브 통합, 라벨 인덱싱으로 저장 비용 낮음 |
 
 ## 현재 버전
 
@@ -59,9 +60,11 @@
 | Python | 3.13 | 2026-07-12 로컬 uv 전환하며 이미지(python:3.13-slim)에 맞춰 3.14→3.13 정합 |
 | FastAPI | 0.139.0 | |
 | uvicorn | 0.50.0 | |
-| Notiflex 이미지 | v0.1.6 | 2026-07-12 CI 자동 빌드/배포 릴리스 (v0.1.1→…→v0.1.6). v0.1.6은 CI가 태그 트리거로 빌드·배포 |
+| Notiflex 이미지 | v0.1.7 | 2026-07-12 v0.1.7: Prometheus 계측(/metrics) 추가 릴리스 (v0.1.1→…→v0.1.7) |
 | ArgoCD | v3.4.5 | 2026-07-12 설치 (stable manifest) |
 | kube-prometheus-stack | 87.15.1 (Helm) | 2026-07-12 설치. Prometheus v3.13.1, Grafana 13.1.0, operator v0.92.1 |
+| Loki | 3.6.7 (grafana/loki Helm) | 2026-07-12 설치. SingleBinary, 2Gi PVC |
+| Fluent Bit | grafana/fluent-bit (plugin-loki 2.1.0) | 2026-07-12 설치. DaemonSet, deprecated 차트지만 정상 동작 |
 | Kafka | (미설치) | |
 | OTel SDK | (미설치) | |
 
@@ -69,7 +72,7 @@
 
 | 노드풀 | 머신 타입 | 노드 수 | 주요 워크로드 |
 |--------|----------|---------|-------------|
-| default-pool | e2-medium (Spot) | 2 | notiflex-api ×2 |
+| default-pool | e2-medium (Spot) | 2 | notiflex-api ×2, 관측 스택(Prometheus/Grafana/Alertmanager/Loki + node-exporter·Fluent Bit DaemonSet), ArgoCD. CPU node1 ~95%/node2 ~80%로 빠듯 → ch6 전 축소 필요 |
 
 ## 트러블슈팅 이력
 
@@ -86,3 +89,7 @@
 | ch4 | helm이 미설치 상태 | `brew install helm` (v4.2.3) |
 | ch4 | helm install이 auto 모드 분류기에 차단(node-exporter가 전클러스터 DaemonSet 생성) | 개인 학습 클러스터임을 확인하고 전체 스택 설치로 진행(사용자 승인) |
 | ch4 | 설치 후 node1 CPU requests 93%(e2-medium allocatable ~940m/노드) | 정상 기동. 예산표대로 ch6 진입 전 관측 스택 requests를 5m으로 선제 축소 필요 |
+| ch4 | Loki `persistence.enabled:false`로 두니 `mkdir /var/loki: read-only file system` CrashLoop | 루트 FS가 읽기 전용이라 /var/loki 쓰기 볼륨 필요. `singleBinary.persistence.enabled:true`(2Gi PVC)로 해결 |
+| ch4 | Loki 차트 기본 memcached 캐시가 수백 Mi 요구 → e2-medium 부족 위험 | `chunksCache.enabled:false`, `resultsCache.enabled:false`로 비활성 |
+| ch4 | grafana/fluent-bit 기본 `servicePath:/api/prom/push`(구버전)라 Loki 3.x 미수신 우려, PSP는 k8s 1.25+ 제거 | `loki.servicePath:/loki/api/v1/push`, `loki.serviceName:loki`, `rbac.pspEnabled:false` |
+| ch4 | Fluent Bit DaemonSet도 클러스터 전체 워크로드라 auto 분류기 승인 대상 | node-exporter와 동일 성격, 로그 수집 목적상 필수 → 진행 |
