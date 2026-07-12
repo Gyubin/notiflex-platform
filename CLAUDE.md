@@ -42,19 +42,32 @@
 ## 임시 중단/재개 (비용 절감)
 
 - 클러스터를 잠시 안 쓸 때는 삭제하지 않고 노드 풀을 0으로 리사이즈한다 (Deployment/Service 등 설정은 컨트롤 플레인에 남아 있으므로 재개 시 그대로 복원됨. Zonal 클러스터 1개는 관리비 무료 티어라 노드가 0이면 비용이 거의 없음).
-- **중단** (PDB가 노드 드레인을 막지 않도록 replicas를 먼저 0으로):
+- **⚠️ ArgoCD 주의 (ch3 이후 필수)**: `notiflex-api`는 ArgoCD `notiflex-smb` 앱이 `selfHeal`로 관리한다. `kubectl scale --replicas=0`만 하면 self-heal이 git 기준(replicas=2)으로 즉시 되돌리고, 되살아난 파드의 **PDB(minAvailable=1)가 마지막 노드 드레인을 무기한 막는다**(PDB도 ArgoCD 관리라 `kubectl delete`해도 복원됨). 그래서 **중단 전에 auto-sync를 먼저 꺼야** 한다. (2026-07-13 실제로 이 문제로 드레인이 1시간+ 멈춤.)
+- **중단**:
   ```bash
+  # 1. ArgoCD auto-sync(self-heal/prune) 중지 — 안 그러면 scale이 되돌려짐
+  kubectl --context notiflex-gke patch application notiflex-smb -n argocd --type merge \
+    -p '{"spec":{"syncPolicy":{"automated":null}}}'
+  # 2. replicas 0으로 (PDB가 노드 드레인 막지 않도록)
   kubectl --context notiflex-gke scale deployment notiflex-api -n notiflex --replicas=0
+  # 3. 노드 풀 0으로 (드레인 완료까지 수 분 소요, gcloud 클라이언트가 타임아웃해도 서버 작업은 계속됨)
   gcloud container clusters resize notiflex-cluster --node-pool default-pool \
     --num-nodes 0 --zone asia-northeast3-a \
     --project project-b3c5c78c-8a5c-4e47-9fe --quiet
+  # 확인: kubectl get nodes 가 "No resources found"면 완료 (describe의 currentNodeCount는 반영 지연 있음)
   ```
 - **재개**:
   ```bash
+  # 1. 노드 복구
   gcloud container clusters resize notiflex-cluster --node-pool default-pool \
     --num-nodes 2 --zone asia-northeast3-a \
     --project project-b3c5c78c-8a5c-4e47-9fe --quiet
-  kubectl --context notiflex-gke scale deployment notiflex-api -n notiflex --replicas=2
+  # 2. ArgoCD auto-sync 재활성화 → notiflex-api가 git(replicas=2)대로 자동 재배포 (kubectl scale 불필요)
+  kubectl --context notiflex-gke patch application notiflex-smb -n argocd --type merge \
+    -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
+  # 3. selfHeal이 바로 안 돌면 즉시 sync 트리거
+  kubectl --context notiflex-gke annotate application notiflex-smb -n argocd \
+    argocd.argoproj.io/refresh=hard --overwrite
   ```
 
 ## 로컬 개발 (uv)

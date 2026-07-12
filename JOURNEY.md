@@ -73,7 +73,9 @@
 
 | 노드풀 | 머신 타입 | 노드 수 | 주요 워크로드 |
 |--------|----------|---------|-------------|
-| default-pool | e2-medium (Spot) | 2 | notiflex-api ×2, 관측 스택(Prometheus/Grafana/Alertmanager/Loki + node-exporter·Fluent Bit DaemonSet), ArgoCD. CPU node1 ~95%/node2 ~80%로 빠듯 → ch6 전 축소 필요 |
+| default-pool | e2-medium (Spot) | **0 (2026-07-13 비용 절감 중단)** | (평상시 2) notiflex-api ×2, 관측 스택(Prometheus/Grafana/Alertmanager/Loki + node-exporter·Fluent Bit DaemonSet), ArgoCD. CPU node1 ~95%/node2 ~80%로 빠듯 → ch6 전 축소 필요 |
+
+> **⚠️ 현재 중단 상태 (2026-07-13)**: 한동안 미사용 예정이라 노드 풀 0으로 리사이즈함. 중단 과정에서 ArgoCD self-heal이 `notiflex-api`를 되살려 PDB가 드레인을 막는 문제 발생 → `notiflex-smb` 앱의 auto-sync(`spec.syncPolicy.automated`)를 **꺼 둔 상태**다. 재개 시 노드 복구 후 **auto-sync를 다시 켜야** 자동 배포된다 (CLAUDE.md "임시 중단/재개" 섹션 참조).
 
 ## 트러블슈팅 이력
 
@@ -85,6 +87,7 @@
 | ch2 | Cloud Build에서 Compute Engine 기본 서비스 계정 권한 부족으로 빌드 실패 | 전용 SA `notiflex-cloudbuild` 생성 + `--default-buckets-behavior=REGIONAL_USER_OWNED_BUCKET` 지정 |
 | ch2 | POD_NAME 기본값 테스트가 환경에 따라 간헐적 실패 | 테스트에서 환경변수를 명시적으로 unset (conftest.py) |
 | ch2 | 노드 풀 0으로 중단 시 PDB가 노드 드레인을 차단 | 리사이즈 전에 Deployment replicas를 먼저 0으로 축소 |
+| ch4~ | (2026-07-13) 노드 0 중단 시 `kubectl scale --replicas=0`이 안 먹힘 → ArgoCD selfHeal이 replicas=2로 되돌리고 되살아난 파드의 PDB가 마지막 노드 드레인을 1시간+ 차단 (PDB도 ArgoCD 관리라 delete해도 복원) | 중단 전에 `notiflex-smb` 앱의 auto-sync(`spec.syncPolicy.automated`)를 먼저 끄고 scale 0 → resize 0. 재개 시 auto-sync 재활성화(필요 시 `refresh=hard`). CLAUDE.md 중단 절차에 반영 |
 | ch3 | 재개 후 auto-sync 재활성화해도 selfHeal이 바로 안 돎 | Application에 `argocd.argoproj.io/refresh=hard` 어노테이션으로 즉시 sync 트리거 |
 | ch3 | CI용 SA 키 생성이 조직 정책(개인 org의 secure-by-default)으로 차단 | SA 키 대신 WIF(키리스)로 전환 |
 | ch4 | helm이 미설치 상태 | `brew install helm` (v4.2.3) |
