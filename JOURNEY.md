@@ -20,7 +20,7 @@
 | ch3 | 3.5 CI-CD 연결 | ✅ | 2026-07-12 | CI가 빌드 후 deployment.yaml 태그 갱신→main push→ArgoCD 자동 배포. `git tag v0.1.6` 한 번으로 v0.1.4→v0.1.6 E2E 검증 |
 | ch4 | 4.2 메트릭 모니터링 | ✅ | 2026-07-12 | kube-prometheus-stack 87.15.1(Helm) 설치, 파드 7개 Running. 앱에 prometheus-fastapi-instrumentator 계측(/metrics, http_requests_total) 추가→v0.1.7 릴리스. ServiceMonitor(notiflex)로 스크레이프(타깃 2/2 UP). Grafana 대시보드 ConfigMap(CPU/메모리/HTTP요청/재시작) 사이드카 자동 임포트 완료 |
 | ch4 | 4.3 로그 수집 | ✅ | 2026-07-12 | Loki(SingleBinary, 2Gi PVC) + Fluent Bit(DaemonSet 2/2) 설치. Grafana Loki 데이터소스 자동 등록(isDefault:false). `{namespace="notiflex"}`로 앱 로그 조회 확인. 캐시/게이트웨이/셀프모니터링 비활성으로 리소스 최소화 |
-| ch4 | 4.4 알림 | ⬜ | | |
+| ch4 | 4.4 알림 | ✅ | 2026-07-12 | PrometheusRule(pod-restart-alert, release:kube-prometheus 라벨) 생성. crashloop 테스트 파드로 재시작 3회 유발 → Prometheus firing + Alertmanager active(severity:warning) E2E 검증. 외부 채널(Slack 등)은 미설정 |
 | ch5 | 5.2 트래픽 관리 | ⬜ | | |
 | ch5 | 5.3 무중단 배포 | ⬜ | | |
 | ch6 | 6.1 캐시 | ⬜ | | |

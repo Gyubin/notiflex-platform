@@ -1,0 +1,22 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: pod-restart-alert
+  namespace: monitoring
+  labels:
+    # 이 라벨이 없으면 Prometheus(ruleSelector)가 규칙을 로드하지 않는다.
+    # Helm release 이름(kube-prometheus)과 일치해야 한다.
+    release: kube-prometheus
+spec:
+  groups:
+    - name: notiflex-alerts
+      rules:
+        - alert: PodRestartTooMany
+          # notiflex 네임스페이스에서 5분 내 컨테이너 재시작이 2회 초과면 발동
+          expr: increase(kube_pod_container_status_restarts_total{namespace="notiflex"}[5m]) > 2
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Pod {{ $labels.pod }} 재시작 과다"
+            description: "5분 내 {{ $value }}회 재시작"
