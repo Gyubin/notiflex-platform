@@ -55,19 +55,32 @@
   kubectl --context notiflex-gke scale deployment notiflex-api -n notiflex --replicas=2
   ```
 
+## 로컬 개발 (uv)
+
+- 로컬 의존성/가상환경은 **uv**로 관리한다 (`app/pyproject.toml` + `app/uv.lock`, `app/.python-version=3.13`). `requirements*.txt`는 폐기.
+- Python은 이미지 베이스(`python:3.13-slim`)에 맞춰 **3.13**으로 고정한다 (dev/운영 정합, `/version`의 runtime으로 실증됨).
+- 설치·테스트: `cd app && uv sync && uv run pytest`.
+
 ## 이미지 빌드
 
-- `app/Dockerfile`을 로컬 Docker가 아닌 **Cloud Build**로 빌드/push한다 (로컬 M-시리즈 맥은 arm64라 GKE 노드(amd64)와 아키텍처가 안 맞아 `--platform` 문제가 생기지만, Cloud Build는 GCP 서버(amd64)에서 빌드해 이 문제가 없음).
-- 전용 서비스 계정 `notiflex-cloudbuild@project-b3c5c78c-8a5c-4e47-9fe.iam.gserviceaccount.com`(`roles/cloudbuild.builds.builder`)을 사용한다. Compute Engine 기본 서비스 계정은 권한이 없어 그대로 쓰면 실패한다.
-- 빌드 커맨드:
+- 평상시 빌드는 **CI(GitHub Actions)가 담당**한다 (아래 "CI/CD" 참조). 아래 수동 빌드는 로컬 일회성/디버그용 fallback이다.
+- `app/Dockerfile`은 `uv sync --frozen` 기반 멀티스테이지(비루트 `appuser`). 앱 버전은 빌드 시 `--build-arg APP_VERSION=<git tag>`로 주입되어 `/version`이 반환한다.
+- 로컬에서 직접 빌드할 땐 로컬 Docker 대신 **Cloud Build**를 쓴다 (M-시리즈 맥은 arm64라 GKE 노드(amd64)와 안 맞음. Cloud Build는 GCP 서버(amd64)에서 빌드). 전용 SA `notiflex-cloudbuild`(`roles/cloudbuild.builds.builder`) 사용:
   ```bash
   gcloud builds submit app/ \
-    --tag=asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform/notiflex-api:v0.1.0 \
+    --tag=asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform/notiflex-api:<버전> \
     --service-account=projects/project-b3c5c78c-8a5c-4e47-9fe/serviceAccounts/notiflex-cloudbuild@project-b3c5c78c-8a5c-4e47-9fe.iam.gserviceaccount.com \
     --default-buckets-behavior=REGIONAL_USER_OWNED_BUCKET
   ```
-  (`--default-buckets-behavior`는 사용자 지정 서비스 계정을 쓸 때 로그 저장 위치를 명시하기 위해 필수)
 - `app/.gcloudignore`로 `.venv/`, `__pycache__/` 등을 업로드 대상에서 제외한다.
+
+## CI/CD (릴리스 주도)
+
+- **트리거**: `git tag vX.Y.Z && git push origin vX.Y.Z` → GitHub Actions(`.github/workflows/ci.yaml`) 실행. main에 코드만 push하면 배포되지 않는다(릴리스 태그가 트리거).
+- **CI**: uv 테스트 → `docker build`(runner, amd64) → Artifact Registry push → `k8s/smb/deployment.yaml` 이미지 태그를 릴리스 버전으로 갱신 → main에 commit/push.
+- **CD**: ArgoCD(Application `notiflex-smb`)가 main의 `k8s/smb` 변경을 감지해 자동 배포(rolling update).
+- **GCP 인증**: Workload Identity Federation(키리스). 조직 정책으로 SA 키 생성이 금지되어, CI는 `notiflex-ci` SA(`roles/artifactregistry.writer`)를 GitHub OIDC로 impersonate한다. 저장되는 키 없음.
+- git 태그가 곧 이미지 태그이자 `APP_VERSION`(`/version` 값)의 단일 소스다.
 
 ## 행동 규칙
 
