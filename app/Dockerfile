@@ -16,7 +16,10 @@ WORKDIR /app
 # 의존성(venv)/코드는 root 소유로 두어 appuser가 변조할 수 없게 한다 (읽기만 가능)
 COPY --from=builder /app/.venv /app/.venv
 COPY main.py .
-ENV PATH="/app/.venv/bin:$PATH"
+# 앱 버전을 빌드 인자로 받아 이미지에 구워 넣는다 (CI가 git 태그를 주입 → /version이 반환)
+ARG APP_VERSION=dev
+ENV APP_VERSION=$APP_VERSION \
+    PATH="/app/.venv/bin:$PATH"
 USER appuser
 EXPOSE 8080
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8080"]

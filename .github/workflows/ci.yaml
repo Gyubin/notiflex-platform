@@ -1,0 +1,44 @@
+name: CI
+
+# 릴리스 태그(v*)를 push할 때만 이미지를 빌드/푸시한다 (릴리스 주도 배포).
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      # 로컬과 동일한 uv.lock으로 설치 후 테스트 (dev/CI 정합)
+      - name: Run tests
+        working-directory: app
+        run: |
+          uv sync --frozen
+          uv run pytest -q
+
+      - name: Authenticate to GCP
+        uses: google-github-actions/auth@v2
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker asia-northeast3-docker.pkg.dev --quiet
+
+      # runner(amd64)에서 직접 빌드. git 태그를 이미지 태그이자 APP_VERSION으로 주입한다.
+      - name: Build and push image
+        working-directory: app
+        run: |
+          IMAGE="asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform/notiflex-api:${GITHUB_REF_NAME}"
+          docker build --build-arg APP_VERSION="${GITHUB_REF_NAME}" -t "$IMAGE" .
+          docker push "$IMAGE"
+          echo "Pushed $IMAGE"
