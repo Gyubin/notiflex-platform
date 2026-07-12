@@ -52,6 +52,7 @@
 | CI 인증 | Workload Identity Federation (키리스) | SA 키 + GitHub Secrets | 조직 정책(iam.disableServiceAccountKeyCreation)으로 SA 키 금지 → OIDC 교환, 저장 키 없음 |
 | 메트릭 모니터링 | Prometheus + Grafana (kube-prometheus-stack) | Datadog, CloudWatch, GCP Monitoring | 오픈소스 K8s 표준(CNCF), 무료 자체 호스팅, Helm 번들로 6개 컴포넌트 일괄 설치, 이후 Loki/Tempo와 Grafana로 통합 |
 | 로그 수집 | Loki + Fluent Bit | ELK Stack, CloudWatch, GCP Logging | 경량(Loki 128Mi vs ELK 2Gi+, e2-medium에 ELK 불가), Grafana 네이티브 통합, 라벨 인덱싱으로 저장 비용 낮음 |
+| 알림 | PrometheusRule + Alertmanager | Grafana Alerting, PagerDuty/Opsgenie, Cloud Monitoring | 4.2 스택에 이미 포함(추가 설치 불필요), CRD를 YAML로 관리해 GitOps 호환(git blame/PR 리뷰), Alertmanager 라우팅/그루핑이 강력, 실무 표준 |
 
 ## 현재 버전
 

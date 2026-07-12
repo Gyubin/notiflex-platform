@@ -17,7 +17,9 @@
 ## 디렉토리 구조
 
 - `app/` — Python 소스 코드
-- `k8s/smb/` — K8s 매니페스트 (배포, 서비스 등)
+- `k8s/smb/` — K8s 매니페스트 (배포, 서비스, ServiceMonitor 등, ArgoCD가 동기화)
+- `k8s/monitoring/` — 모니터링 관련 매니페스트 (Grafana 대시보드/데이터소스 ConfigMap, PrometheusRule). ArgoCD 대상이 아니라 `kubectl apply`로 적용
+- `helm-values/` — Helm 차트 values (kube-prometheus-stack, Loki, Fluent Bit)
 - `.github/workflows/` — CI 파이프라인
 
 ## GCP 설정
@@ -81,6 +83,15 @@
 - **CD**: ArgoCD(Application `notiflex-smb`)가 main의 `k8s/smb` 변경을 감지해 자동 배포(rolling update).
 - **GCP 인증**: Workload Identity Federation(키리스). 조직 정책으로 SA 키 생성이 금지되어, CI는 `notiflex-ci` SA(`roles/artifactregistry.writer`)를 GitHub OIDC로 impersonate한다. 저장되는 키 없음.
 - git 태그가 곧 이미지 태그이자 `APP_VERSION`(`/version` 값)의 단일 소스다.
+
+## 관측 가능성 (ch4에서 구축)
+
+- **네임스페이스**: `monitoring`. Helm으로 설치했고 ArgoCD 관리 대상이 아니다 (values는 `helm-values/`, 매니페스트는 `k8s/monitoring/`).
+- **메트릭**: kube-prometheus-stack (Prometheus + Grafana + Alertmanager + node-exporter + kube-state-metrics). 앱은 `prometheus-fastapi-instrumentator`로 `/metrics`(`http_requests_total` 등)를 노출하고, `k8s/smb/servicemonitor.yaml`(라벨 `release: kube-prometheus`)로 Prometheus가 스크레이프한다.
+- **로그**: Loki(SingleBinary) + Fluent Bit(DaemonSet). Grafana Loki 데이터소스 등록됨(`isDefault: false`). LogQL `{namespace="notiflex"}`로 조회.
+- **알림**: PrometheusRule `pod-restart-alert`(재시작 과다 → Alertmanager). **외부 채널(Slack/이메일 등)은 미설정** — Alertmanager receiver가 기본 `null`이라 발동은 되지만 외부 전송은 안 된다. 붙이려면 receiver를 설정하고 자격 증명은 Secret으로 분리한다.
+- **접속**: `kubectl --context notiflex-gke -n monitoring port-forward svc/kube-prometheus-grafana 3000:80` → `http://localhost:3000` (admin, 비밀번호는 `kube-prometheus-grafana` Secret).
+- **⚠️ 리소스**: 관측 스택 설치 후 node CPU requests가 ~95%로 빠듯하다. **ch6(CSI DaemonSet 추가) 진입 전** Prometheus/Grafana/Alertmanager/operator/Loki의 CPU requests를 5m으로 선제 축소해야 한다.
 
 ## 행동 규칙
 
