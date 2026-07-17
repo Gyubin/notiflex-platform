@@ -21,8 +21,8 @@
 | ch4 | 4.2 메트릭 모니터링 | ✅ | 2026-07-12 | kube-prometheus-stack 87.15.1(Helm) 설치, 파드 7개 Running. 앱에 prometheus-fastapi-instrumentator 계측(/metrics, http_requests_total) 추가→v0.1.7 릴리스. ServiceMonitor(notiflex)로 스크레이프(타깃 2/2 UP). Grafana 대시보드 ConfigMap(CPU/메모리/HTTP요청/재시작) 사이드카 자동 임포트 완료 |
 | ch4 | 4.3 로그 수집 | ✅ | 2026-07-12 | Loki(SingleBinary, 2Gi PVC) + Fluent Bit(DaemonSet 2/2) 설치. Grafana Loki 데이터소스 자동 등록(isDefault:false). `{namespace="notiflex"}`로 앱 로그 조회 확인. 캐시/게이트웨이/셀프모니터링 비활성으로 리소스 최소화 |
 | ch4 | 4.4 알림 | ✅ | 2026-07-12 | PrometheusRule(pod-restart-alert, release:kube-prometheus 라벨) 생성. crashloop 테스트 파드로 재시작 3회 유발 → Prometheus firing + Alertmanager active(severity:warning) E2E 검증. 외부 채널(Slack 등)은 미설정 |
-| ch5 | 5.2 트래픽 관리 | ⬜ | | |
-| ch5 | 5.3 무중단 배포 | ⬜ | | |
+| ch5 | 5.2 트래픽 관리 | ✅ | 2026-07-18 | GKE Gateway API(Regional external)로 외부 IP `35.216.8.57` 할당. HTTPRoute `/` → active Service `notiflex-api:8080`, HealthCheckPolicy `/health:8080` 검증 |
+| ch5 | 5.3 무중단 배포 | ✅ | 2026-07-18 | Argo Rollouts v1.9.1 Blue/Green 전환. `notiflex-api-preview` 추가, v0.2.0 preview 생성 후 30초 자동 승격·active 전환 검증 |
 | ch6 | 6.1 캐시 | ⬜ | | |
 | ch6 | 6.2 시크릿 관리 | ⬜ | | |
 | ch6 | 6.3 Canary 전환 | ⬜ | | |
@@ -53,6 +53,8 @@
 | 메트릭 모니터링 | Prometheus + Grafana (kube-prometheus-stack) | Datadog, CloudWatch, GCP Monitoring | 오픈소스 K8s 표준(CNCF), 무료 자체 호스팅, Helm 번들로 6개 컴포넌트 일괄 설치, 이후 Loki/Tempo와 Grafana로 통합 |
 | 로그 수집 | Loki + Fluent Bit | ELK Stack, CloudWatch, GCP Logging | 경량(Loki 128Mi vs ELK 2Gi+, e2-medium에 ELK 불가), Grafana 네이티브 통합, 라벨 인덱싱으로 저장 비용 낮음 |
 | 알림 | PrometheusRule + Alertmanager | Grafana Alerting, PagerDuty/Opsgenie, Cloud Monitoring | 4.2 스택에 이미 포함(추가 설치 불필요), CRD를 YAML로 관리해 GitOps 호환(git blame/PR 리뷰), Alertmanager 라우팅/그루핑이 강력, 실무 표준 |
+| 외부 트래픽 | GKE Gateway API | GKE Ingress, NGINX Ingress | GKE 네이티브라 별도 Controller가 없고, HTTPRoute로 표준적인 라우팅을 선언하며, 기존 active Service를 유지해 Blue/Green 전환과 자연스럽게 연동 |
+| 무중단 배포 | Argo Rollouts Blue/Green | Deployment Rolling Update, Canary | preview 리비전을 active 트래픽과 분리해 검증한 뒤 30초 후 전환 가능. 2 replica 규모에서는 이중 Pod 비용이 감당 가능하고, Canary 자동 판정을 위한 메트릭 기준은 아직 미구축 |
 
 ## 현재 버전
 
@@ -61,8 +63,9 @@
 | Python | 3.13 | 2026-07-12 로컬 uv 전환하며 이미지(python:3.13-slim)에 맞춰 3.14→3.13 정합 |
 | FastAPI | 0.139.0 | |
 | uvicorn | 0.50.0 | |
-| Notiflex 이미지 | v0.1.7 | 2026-07-12 v0.1.7: Prometheus 계측(/metrics) 추가 릴리스 (v0.1.1→…→v0.1.7) |
+| Notiflex 이미지 | v0.2.0 | 2026-07-18 v0.2.0: Argo Rollouts Blue/Green preview 생성 → 30초 auto-promotion → active Service 전환 검증 |
 | ArgoCD | v3.4.5 | 2026-07-12 설치 (stable manifest) |
+| Argo Rollouts | v1.9.1 | 2026-07-18 설치. active Service `notiflex-api`, preview Service `notiflex-api-preview`, autoPromotionSeconds=30 |
 | kube-prometheus-stack | 87.15.1 (Helm) | 2026-07-12 설치. Prometheus v3.13.1, Grafana 13.1.0, operator v0.92.1 |
 | Loki | 3.6.7 (grafana/loki Helm) | 2026-07-12 설치. SingleBinary, 2Gi PVC |
 | Fluent Bit | grafana/fluent-bit (plugin-loki 2.1.0) | 2026-07-12 설치. DaemonSet, deprecated 차트지만 정상 동작 |
@@ -73,9 +76,9 @@
 
 | 노드풀 | 머신 타입 | 노드 수 | 주요 워크로드 |
 |--------|----------|---------|-------------|
-| default-pool | e2-medium (Spot) | **0 (2026-07-13 비용 절감 중단)** | (평상시 2) notiflex-api ×2, 관측 스택(Prometheus/Grafana/Alertmanager/Loki + node-exporter·Fluent Bit DaemonSet), ArgoCD. CPU node1 ~95%/node2 ~80%로 빠듯 → ch6 전 축소 필요 |
+| default-pool | e2-medium (Spot) | **2 (2026-07-18 ch5 실습 재개)** | notiflex-api Rollout ×2, 관측 스택(Prometheus/Grafana/Alertmanager/Loki + node-exporter·Fluent Bit DaemonSet), ArgoCD, Argo Rollouts. CPU requests가 빠듯하므로 ch6 전 관측 스택 축소 필요 |
 
-> **⚠️ 현재 중단 상태 (2026-07-13)**: 한동안 미사용 예정이라 노드 풀 0으로 리사이즈함. 중단 과정에서 ArgoCD self-heal이 `notiflex-api`를 되살려 PDB가 드레인을 막는 문제 발생 → `notiflex-smb` 앱의 auto-sync(`spec.syncPolicy.automated`)를 **꺼 둔 상태**다. 재개 시 노드 복구 후 **auto-sync를 다시 켜야** 자동 배포된다 (CLAUDE.md "임시 중단/재개" 섹션 참조).
+> **운영 주의**: ch5 실습을 위해 노드 풀을 2개로 재개하고 `notiflex-smb` auto-sync를 다시 켰다. 다시 중단할 때는 auto-sync 비활성화 → Rollout replica 0 → 노드 풀 0 순서를 지킨다. 그렇지 않으면 self-heal과 PDB가 드레인을 막을 수 있다 (AGENTS.md "Paused Cluster" 참조).
 
 ## 트러블슈팅 이력
 
