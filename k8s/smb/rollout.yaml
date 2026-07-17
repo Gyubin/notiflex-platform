@@ -1,10 +1,11 @@
-apiVersion: apps/v1
-kind: Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
 metadata:
   name: notiflex-api
   namespace: notiflex
 spec:
   replicas: 2
+  revisionHistoryLimit: 2
   selector:
     matchLabels:
       app: notiflex-api
@@ -52,7 +53,6 @@ spec:
                 - ALL
             seccompProfile:
               type: RuntimeDefault
-      # Spot VM 노드라 preemption 후 재스케줄링 시 한 노드에 몰리는 것을 방지
       topologySpreadConstraints:
         - maxSkew: 1
           topologyKey: kubernetes.io/hostname
@@ -60,7 +60,11 @@ spec:
           labelSelector:
             matchLabels:
               app: notiflex-api
-          # 같은 리비전(pod-template-hash) 기준으로만 스큐를 계산해,
-          # 롤링 업데이트 중 종료되는 구 Pod 때문에 새 Pod가 한 노드에 몰리는 것을 방지
           matchLabelKeys:
-            - pod-template-hash
+            - rollouts-pod-template-hash
+  strategy:
+    blueGreen:
+      activeService: notiflex-api
+      previewService: notiflex-api-preview
+      autoPromotionEnabled: true
+      autoPromotionSeconds: 30

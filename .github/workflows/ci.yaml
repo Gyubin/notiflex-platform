@@ -60,12 +60,12 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git checkout -B main origin/main
-          sed -i "s|image: .*notiflex-api:.*|image: ${IMAGE_URI}|" k8s/smb/deployment.yaml
-          grep "image:" k8s/smb/deployment.yaml
-          if git diff --quiet k8s/smb/deployment.yaml; then
+          sed -i "s|image: .*notiflex-api:.*|image: ${IMAGE_URI}|" k8s/smb/rollout.yaml
+          grep "image:" k8s/smb/rollout.yaml
+          if git diff --quiet k8s/smb/rollout.yaml; then
             echo "manifest already up to date, nothing to commit"
             exit 0
           fi
-          git add k8s/smb/deployment.yaml
+          git add k8s/smb/rollout.yaml
           git commit -m "ci: deploy notiflex-api ${GITHUB_REF_NAME}"
           git push origin main
