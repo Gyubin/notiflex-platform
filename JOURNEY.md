@@ -100,3 +100,6 @@
 | ch4 | Loki 차트 기본 memcached 캐시가 수백 Mi 요구 → e2-medium 부족 위험 | `chunksCache.enabled:false`, `resultsCache.enabled:false`로 비활성 |
 | ch4 | grafana/fluent-bit 기본 `servicePath:/api/prom/push`(구버전)라 Loki 3.x 미수신 우려, PSP는 k8s 1.25+ 제거 | `loki.servicePath:/loki/api/v1/push`, `loki.serviceName:loki`, `rbac.pspEnabled:false` |
 | ch4 | Fluent Bit DaemonSet도 클러스터 전체 워크로드라 auto 분류기 승인 대상 | node-exporter와 동일 성격, 로그 수집 목적상 필수 → 진행 |
+| ch5 | Regional external Gateway 생성 전 서울 리전에 proxy-only 서브넷이 없음 | `default` 네트워크에 `REGIONAL_MANAGED_PROXY` 용도의 `proxy-only-subnet`(`172.16.0.0/23`)을 생성한 뒤 Gateway가 외부 IP를 할당받음 |
+| ch5 | `kubectl argo rollouts` 플러그인 조회에서 컨텍스트를 생략해 기본 회사 AWS 컨텍스트의 OIDC 인증이 시도됨 | 세션 시작 시 기본 컨텍스트를 `notiflex-gke`로 확인·전환하고, 플러그인 명령은 `kubectl argo rollouts --context notiflex-gke ...` 형식으로 명시. 일반 `kubectl`도 계속 `--context notiflex-gke`를 사용 |
+| ch5 | v0.2.0 CI가 `rollout.yaml`을 main에 먼저 커밋해 문서 푸시가 non-fast-forward로 거절됨 | 원격의 CI 커밋 범위를 확인한 뒤 `git rebase --autostash origin/main`으로 사용자 작업을 보존하며 문서 커밋을 재배치. force push는 사용하지 않음 |
