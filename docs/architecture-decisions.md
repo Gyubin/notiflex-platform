@@ -49,9 +49,34 @@
 - active Service를 유지해 Argo Rollouts Blue/Green 전환과 자연스럽게 연동된다.
 
 ## ADR-007: 무중단 배포는 Blue/Green (5장)
+**상태**: ADR-010으로 대체됨
 **시점**: 2026-07 / **결정**: Argo Rollouts의 Blue/Green 전략을 사용한다. 기본 Deployment Rolling Update와 Canary는 사용하지 않는다.
 **이유**:
 - preview 리비전을 active 트래픽과 분리해 검증한 뒤 전환한다.
 - `autoPromotionSeconds: 30`으로 검증 시간과 자동 전환을 명시한다.
 - 2 replica 규모에서는 일시적인 이중 Pod 리소스 비용을 감당할 수 있다.
 - Canary 자동 판정을 위한 메트릭 임계값과 분석 정책은 아직 준비되지 않았다.
+
+## ADR-008: 공유 카운터는 Valkey (6장)
+**시점**: 2026-07 / **결정**: Pod 간 공유 상태와 원자적 ID 생성에 Valkey standalone을 사용한다. Redis, Memcached, DragonflyDB는 도입하지 않는다.
+**이유**:
+- Redis 호환 `INCR` 연산으로 여러 API Pod가 하나의 ID 순서를 안전하게 공유한다.
+- BSD 라이선스의 오픈소스 구현이라 Redis 라이선스 변화와 공급자 종속을 피한다.
+- 2~3개 e2-medium 노드의 학습 환경에 50m CPU, 64Mi 메모리 요청의 standalone 구성이 적합하다.
+- 1Gi PVC로 Pod 재시작 뒤에도 카운터 상태를 유지한다.
+
+## ADR-009: 시크릿 원본은 GCP Secret Manager (6장)
+**시점**: 2026-07 / **결정**: Valkey 비밀번호는 GCP Secret Manager에 저장하고 GKE 관리형 CSI Driver와 Workload Identity로 전달한다. 평문 Kubernetes Secret, Sealed Secrets, External Secrets Operator는 사용하지 않는다.
+**이유**:
+- Workload Identity로 저장형 서비스 계정 키 없이 최소 권한의 GCP Service Account를 사용한다.
+- CSI 읽기 전용 파일 마운트로 비밀번호를 Git, 이미지, Pod 환경변수에 복제하지 않는다.
+- GKE 관리형 Driver를 사용해 별도 시크릿 동기화 Operator의 설치와 운영 부담을 피한다.
+- Secret Manager의 버전 관리와 IAM 감사 경계를 시크릿 원본에 그대로 적용한다.
+
+## ADR-010: 점진 배포는 Argo Rollouts Canary (6장)
+**시점**: 2026-07 / **결정**: 5장의 Blue/Green 전략을 Argo Rollouts Canary로 전환한다. Blue/Green 유지와 기본 Rolling Update는 선택하지 않는다.
+**이유**:
+- 새 버전의 목표 노출을 20%, 50%, 80% 순서로 늘려 한 번의 전체 전환보다 영향 범위를 줄인다.
+- 각 단계에 30초 관찰 구간을 두고 문제 발생 시 안정 버전으로 중단할 수 있다.
+- 기존 Rollout CRD와 stable/preview Service를 재사용하므로 별도 배포 도구가 필요 없다.
+- Blue/Green의 상시 이중 환경보다 점진적으로 리소스를 늘리는 확장 경로를 제공한다.
