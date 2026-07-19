@@ -42,6 +42,7 @@ argocd/               # ArgoCD Application 정의 (notiflex-smb)
 AGENTS.md             # 모든 코딩 에이전트의 프로젝트 정본 가이드
 CLAUDE.md             # Claude Code 호환 진입점 (AGENTS.md로 연결)
 docs/agent-workflows/ # 에이전트 공통 운영 절차
+docs/blog/            # 챕터별 구축기와 기술 회고
 docs/superpowers/     # 설계 스펙 및 구현 플랜 문서
 ```
 
@@ -128,4 +129,4 @@ kubectl --context notiflex-gke -n monitoring port-forward svc/kube-prometheus-gr
 
 ---
 
-자세한 GCP/클러스터 설정·비용 절감(중단/재개) 절차·작업 규칙은 [AGENTS.md](AGENTS.md)를 참고하세요. [CLAUDE.md](CLAUDE.md)는 Claude Code 호환 진입점이며, 진행 기록은 [JOURNEY.md](JOURNEY.md), 결정 기록은 [docs/architecture-decisions.md](docs/architecture-decisions.md)에 있습니다.
+자세한 GCP/클러스터 설정·비용 절감(중단/재개) 절차·작업 규칙은 [AGENTS.md](AGENTS.md)를 참고하세요. [CLAUDE.md](CLAUDE.md)는 Claude Code 호환 진입점이며, 진행 기록은 [JOURNEY.md](JOURNEY.md), 결정 기록은 [docs/architecture-decisions.md](docs/architecture-decisions.md)에 있습니다. 6장 전체 구축 과정은 [6장 기술 블로그](docs/blog/chapter-6-enterprise-foundation.md)에서 읽을 수 있습니다.
