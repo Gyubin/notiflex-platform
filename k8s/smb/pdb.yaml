@@ -4,7 +4,9 @@ metadata:
   name: notiflex-api
   namespace: notiflex
 spec:
-  minAvailable: 1
+  # ch6 Workload Identity node replacement 중 단일 replica를 새 노드로 옮길 수 있게 한다.
+  # ch7에서 노드 용량과 replicas를 복원할 때 minAvailable: 1도 함께 복원한다.
+  minAvailable: 0
   selector:
     matchLabels:
       app: notiflex-api
