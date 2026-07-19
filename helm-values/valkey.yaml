@@ -1,0 +1,19 @@
+# Valkey standalone — ch6.1 Pod 간 ID 상태 공유용
+# Git에는 Helm 입력값만 저장한다. 인증 비밀번호는 Helm이 생성하는 Secret에만 존재한다.
+architecture: standalone
+
+auth:
+  enabled: true
+
+primary:
+  resourcesPreset: none
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  persistence:
+    enabled: true
+    size: 1Gi

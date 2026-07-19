@@ -9,7 +9,7 @@ prometheus:
     retention: 2d                    # 장기 저장 불필요, 디스크/메모리 절약
     resources:
       requests:
-        cpu: 100m
+        cpu: 5m
         memory: 256Mi
       limits:
         memory: 512Mi
@@ -19,7 +19,7 @@ prometheus:
 grafana:
   resources:
     requests:
-      cpu: 50m
+      cpu: 5m
       memory: 128Mi
     limits:
       memory: 256Mi
@@ -31,7 +31,7 @@ alertmanager:
   alertmanagerSpec:
     resources:
       requests:
-        cpu: 25m
+        cpu: 5m
         memory: 64Mi
       limits:
         memory: 128Mi
@@ -40,7 +40,7 @@ alertmanager:
 prometheusOperator:
   resources:
     requests:
-      cpu: 25m
+      cpu: 5m
       memory: 64Mi
     limits:
       memory: 128Mi

@@ -4,7 +4,9 @@ metadata:
   name: notiflex-api
   namespace: notiflex
 spec:
-  replicas: 2
+  # ch6의 Valkey와 이후 CSI DaemonSet을 2노드 e2-medium 환경에 수용하기 위해
+  # ch7 노드풀 확장 전까지 단일 replica로 운영한다.
+  replicas: 1
   revisionHistoryLimit: 2
   selector:
     matchLabels:
@@ -24,6 +26,13 @@ spec:
               valueFrom:
                 fieldRef:
                   fieldPath: metadata.name
+            - name: VALKEY_ADDR
+              value: valkey-primary.notiflex.svc.cluster.local:6379
+            - name: VALKEY_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: valkey
+                  key: valkey-password
           readinessProbe:
             httpGet:
               path: /health
