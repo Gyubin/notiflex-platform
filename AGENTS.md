@@ -157,6 +157,7 @@ gcloud container clusters resize notiflex-cluster --node-pool default-pool \
    or Secret Manager.
 10. Do not commit build output, binaries, `dist/`, or `bin/`.
 11. Reference Secret Manager or Kubernetes Secret resources instead of embedding actual secret values in manifests.
+12. Write blog drafts only in the workspace-sibling `../for-blog/` directory, outside this repository; blog content must never be added to a commit or retained in this repository's Git history.
 
 ## Documentation Updates
 
