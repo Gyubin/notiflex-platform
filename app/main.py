@@ -4,6 +4,7 @@ import platform
 import time
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 import redis
 from fastapi import FastAPI, HTTPException
@@ -17,10 +18,18 @@ VALKEY_CONNECT_RETRY_SECONDS = 3
 _valkey_client: redis.Redis | None = None
 
 
+def get_valkey_password() -> str:
+    """CSI가 마운트한 파일을 우선 사용하고, 로컬 개발은 환경변수를 사용한다."""
+    password_file = os.environ.get("VALKEY_PASSWORD_FILE")
+    if password_file:
+        return Path(password_file).read_text()
+    return os.environ["VALKEY_PASSWORD"]
+
+
 def connect_to_valkey() -> redis.Redis:
     """Valkey가 준비될 때까지 연결을 확인해 시작 순서 경합을 흡수한다."""
     address = os.environ["VALKEY_ADDR"]
-    password = os.environ["VALKEY_PASSWORD"]
+    password = get_valkey_password()
     host, port = address.rsplit(":", maxsplit=1)
 
     for attempt in range(1, VALKEY_CONNECT_ATTEMPTS + 1):

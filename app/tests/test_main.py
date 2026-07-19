@@ -105,3 +105,12 @@ def test_connect_to_valkey_retries_until_ping_succeeds(monkeypatch):
     assert connection_args["host"] == "valkey-primary.notiflex.svc.cluster.local"
     assert connection_args["port"] == 6379
     assert connection_args["password"] == "test-password"
+
+
+def test_get_valkey_password_reads_csi_mounted_file(monkeypatch, tmp_path):
+    password_file = tmp_path / "valkey-password"
+    password_file.write_text("mounted-password")
+    monkeypatch.setenv("VALKEY_PASSWORD_FILE", str(password_file))
+    monkeypatch.setenv("VALKEY_PASSWORD", "environment-password")
+
+    assert main.get_valkey_password() == "mounted-password"
