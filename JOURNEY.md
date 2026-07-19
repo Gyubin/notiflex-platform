@@ -24,7 +24,7 @@
 | ch5 | 5.2 트래픽 관리 | ✅ | 2026-07-18 | GKE Gateway API(Regional external)로 외부 IP `35.216.8.57` 할당. HTTPRoute `/` → active Service `notiflex-api:8080`, HealthCheckPolicy `/health:8080` 검증 |
 | ch5 | 5.3 무중단 배포 | ✅ | 2026-07-18 | Argo Rollouts v1.9.1 Blue/Green 전환. `notiflex-api-preview` 추가, v0.2.0 preview 생성 후 30초 자동 승격·active 전환 검증 |
 | ch6 | 6.1 캐시 | ✅ | 2026-07-20 | Bitnami Valkey 9.1.0 standalone(1Gi PVC) 설치. FastAPI `/id`를 Valkey `INCR`로 전환하고 v0.2.1 배포 후 Gateway에서 1→2→3 순차 증가 검증 |
-| ch6 | 6.2 시크릿 관리 | ⬜ | | |
+| ch6 | 6.2 시크릿 관리 | ✅ | 2026-07-20 | Workload Identity와 GKE 관리형 Secret Manager CSI Driver 구성. Valkey 비밀번호를 Secret Manager에 이관하고 v0.2.2에서 읽기 전용 파일 마운트(`/mnt/secrets/valkey-password`) 검증 |
 | ch6 | 6.3 Canary 전환 | ⬜ | | |
 | ch7 | 7.2 멀티 노드풀 | ⬜ | | |
 | ch7 | 7.3 App of Apps | ⬜ | | |
@@ -56,6 +56,7 @@
 | 외부 트래픽 | GKE Gateway API | GKE Ingress, NGINX Ingress | GKE 네이티브라 별도 Controller가 없고, HTTPRoute로 표준적인 라우팅을 선언하며, 기존 active Service를 유지해 Blue/Green 전환과 자연스럽게 연동 |
 | 무중단 배포 | Argo Rollouts Blue/Green | Deployment Rolling Update, Canary | preview 리비전을 active 트래픽과 분리해 검증한 뒤 30초 후 전환 가능. 2 replica 규모에서는 이중 Pod 비용이 감당 가능하고, Canary 자동 판정을 위한 메트릭 기준은 아직 미구축 |
 | 캐시 (ch6.1) | Valkey standalone | Redis, Memcached, DragonflyDB | Redis 호환 `INCR`로 Pod 간 원자적 ID 생성을 보장하고 BSD 라이선스를 유지한다. 2노드 학습 환경에는 50m/64Mi 요청과 1Gi PVC의 단일 인스턴스가 적합 |
+| 시크릿 관리 (ch6.2) | GKE Secret Manager CSI + Workload Identity | K8s Secret, Sealed Secrets, External Secrets Operator | GKE 네이티브 Workload Identity로 키 파일 없이 Secret Manager를 읽고, CSI 파일 마운트로 앱 환경변수·Git에 비밀번호를 복제하지 않는다 |
 
 ## 현재 버전
 
@@ -64,13 +65,14 @@
 | Python | 3.13 | 2026-07-12 로컬 uv 전환하며 이미지(python:3.13-slim)에 맞춰 3.14→3.13 정합 |
 | FastAPI | 0.139.0 | |
 | uvicorn | 0.50.0 | |
-| Notiflex 이미지 | v0.2.1 | 2026-07-20 v0.2.1: Valkey `INCR` 기반 전역 ID 생성 및 시작 연결 재시도(최대 10회, 3초 간격). Gateway `/id` 1→2→3 검증 |
+| Notiflex 이미지 | v0.2.2 | 2026-07-20 v0.2.2: Valkey 비밀번호를 GKE Secret Manager CSI 읽기 전용 파일(`/mnt/secrets/valkey-password`)에서 읽도록 전환. Gateway `/id` 4→5 검증 |
 | ArgoCD | v3.4.5 | 2026-07-12 설치 (stable manifest) |
 | Argo Rollouts | v1.9.1 | 2026-07-18 설치. active Service `notiflex-api`, preview Service `notiflex-api-preview`, autoPromotionSeconds=30 |
 | kube-prometheus-stack | 87.15.1 (Helm) | 2026-07-12 설치. Prometheus v3.13.1, Grafana 13.1.0, operator v0.92.1 |
 | Loki | 3.6.7 (grafana/loki Helm) | 2026-07-12 설치. SingleBinary, 2Gi PVC |
 | Fluent Bit | grafana/fluent-bit (plugin-loki 2.1.0) | 2026-07-12 설치. DaemonSet, deprecated 차트지만 정상 동작 |
 | Valkey | 9.1.0 (Bitnami chart 6.2.0) | 2026-07-20 설치. standalone, 비밀번호 인증, 1Gi PVC. Helm이 `valkey` Secret의 `valkey-password`를 생성 |
+| Secret Manager CSI | GKE 관리형 addon | 2026-07-20 활성화. `secrets-store-gke.csi.k8s.io` Driver + provider `gke`, Workload Identity pool `project-b3c5c78c-8a5c-4e47-9fe.svc.id.goog` |
 | Kafka | (미설치) | |
 | OTel SDK | (미설치) | |
 
@@ -78,7 +80,7 @@
 
 | 노드풀 | 머신 타입 | 노드 수 | 주요 워크로드 |
 |--------|----------|---------|-------------|
-| default-pool | e2-medium (Spot) | **2 (2026-07-18 ch5 실습 재개)** | notiflex-api Rollout ×1(ch7 확장 전 임시 축소), Valkey standalone, 관측 스택(Prometheus/Grafana/Alertmanager/Loki의 CPU request 각 5m + node-exporter·Fluent Bit DaemonSet), ArgoCD, Argo Rollouts. ch6.2 CSI DaemonSet 전 메모리 사용량을 계속 관찰 필요 |
+| default-pool | e2-medium (Spot) | **3 (2026-07-20 ch6.2 임시 확장)** | notiflex-api Rollout ×1(ch7 확장 전 임시 축소), Valkey standalone, GKE Secret Manager CSI DaemonSet ×3, 관측 스택(Prometheus/Grafana/Alertmanager/Loki의 CPU request 각 5m + node-exporter·Fluent Bit DaemonSet), ArgoCD, Argo Rollouts. CSI 추가 뒤 2노드 CPU 예약이 포화돼 가용성 복구를 위해 3노드로 확장 |
 
 > **운영 주의**: ch5 실습을 위해 노드 풀을 2개로 재개하고 `notiflex-smb` auto-sync를 다시 켰다. 다시 중단할 때는 auto-sync 비활성화 → Rollout replica 0 → 노드 풀 0 순서를 지킨다. 그렇지 않으면 self-heal과 PDB가 드레인을 막을 수 있다 (AGENTS.md "Paused Cluster" 참조).
 
@@ -106,3 +108,6 @@
 | ch5 | `kubectl argo rollouts` 플러그인 조회에서 컨텍스트를 생략해 기본 회사 AWS 컨텍스트의 OIDC 인증이 시도됨 | 세션 시작 시 기본 컨텍스트를 `notiflex-gke`로 확인·전환하고, 플러그인 명령은 `kubectl argo rollouts --context notiflex-gke ...` 형식으로 명시. 일반 `kubectl`도 계속 `--context notiflex-gke`를 사용 |
 | ch5 | v0.2.0 CI가 `rollout.yaml`을 main에 먼저 커밋해 문서 푸시가 non-fast-forward로 거절됨 | 원격의 CI 커밋 범위를 확인한 뒤 `git rebase --autostash origin/main`으로 사용자 작업을 보존하며 문서 커밋을 재배치. force push는 사용하지 않음 |
 | ch6 | Bitnami Valkey chart 6.2.0이 `bitnami/valkey:latest` 롤링 태그 경고를 표시 | 학습 환경에서는 chart 6.2.0을 고정해 사용. 운영 전환 시에는 이미지 digest 또는 지원되는 고정 이미지 태그로 검토 필요 |
+| ch6 | Workload Identity 노드 교체가 단일 API replica의 PDB(`minAvailable: 1`) 때문에 드레인에서 정체 | GitOps PDB를 `minAvailable: 0`으로 임시 완화해 새 노드로 재배치. ch7에서 replicas와 함께 `minAvailable: 1` 복원 필요 |
+| ch6 | CSI DaemonSet 추가 뒤 2개 e2-medium 노드의 CPU 예약이 96% 이상으로 포화되어 API·Valkey가 Pending | Loki·Fluent Bit만 중지해도 50m Pod를 수용할 여유가 부족해 default-pool을 Spot 노드 3개로 임시 확장. ch7 역할별 노드풀 설계에서 재평가 |
+| ch6 | CSI Rollout이 이전 이미지(v0.2.1)를 그대로 사용해 `VALKEY_PASSWORD` 누락으로 CrashLoop | 코드 변경 후 새 불변 태그 `v0.2.2`를 릴리스해 `VALKEY_PASSWORD_FILE` 지원 이미지를 배포 |
