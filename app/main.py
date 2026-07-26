@@ -14,6 +14,12 @@ from fastapi import FastAPI, HTTPException
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
+# uvicorn 은 자기 로거만 설정하므로, 이걸 안 하면 root 로거에 핸들러가 없어
+# 앱이 직접 남기는 logger.info 가 전부 사라진다 (액세스 로그만 보인다).
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+)
 logger = logging.getLogger(__name__)
 
 VALKEY_CONNECT_ATTEMPTS = 10
