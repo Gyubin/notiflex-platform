@@ -26,6 +26,7 @@
 | ch6 | 6.1 캐시 | ✅ | 2026-07-20 | Bitnami Valkey 9.1.0 standalone(1Gi PVC) 설치. FastAPI `/id`를 Valkey `INCR`로 전환하고 v0.2.1 배포 후 Gateway에서 1→2→3 순차 증가 검증 |
 | ch6 | 6.2 시크릿 관리 | ✅ | 2026-07-20 | Workload Identity와 GKE 관리형 Secret Manager CSI Driver 구성. Valkey 비밀번호를 Secret Manager에 이관하고 v0.2.2에서 읽기 전용 파일 마운트(`/mnt/secrets/valkey-password`) 검증 |
 | ch6 | 6.3 Canary 전환 | ✅ | 2026-07-20 | Argo Rollouts Canary(20%→50%→80%→100%, 각 30초) 전환. v0.2.3 실배포 후 자동 진행·승격 검증 |
+| ch6 | 6.4 아키텍처 스냅샷 | ✅ | 2026-07-27 | 소급 기록. ch6 시점에 건너뛴 것을 ch8 완료 후 작성. `claude-context/architecture.md`에 클러스터 토폴로지·컴포넌트 흐름·배포 파이프라인·관측 스택·네임스페이스를 현재(ch8) 상태로 정리. 규칙(AGENTS.md)·현재 상태(claude-context)·결정 이유(ADR) 3층 분리 |
 | ch7 | 7.2 멀티 노드풀 | ✅ | 2026-07-27 | 역할별 Spot 노드풀 api-pool(e2-medium)·worker-pool(e2-standard-2)·ops-pool(e2-small) 생성. Rollout에 `cloud.google.com/gke-nodepool: api-pool` nodeSelector 적용해 API Pod 2개가 api-pool에 배치됨을 확인. 전용 노드 확보로 replicas 1→2, PDB `minAvailable` 0→1 복원 |
 | ch7 | 7.3 App of Apps | ✅ | 2026-07-27 | `argocd/root-app.yaml`이 `argocd/apps/`를 감시(`directory.recurse`)하는 App of Apps 구성. 기존 `notiflex-smb`를 `argocd/apps/`로 이동하고, 수동 `kubectl apply`로 관리하던 `k8s/monitoring/`을 `notiflex-monitoring` Application으로 편입. sync-wave 1(플랫폼)→2(앱) |
 | ch7 | 7.4 멀티테넌시 | ✅ | 2026-07-27 | `enterprise` 네임스페이스에 별도 Rollout/Service/SA 배포. `argocd/apps/notiflex-enterprise.yaml`을 root-app이 자동 감지해 Application 생성(`CreateNamespace=true`). 교재의 커밋된 Valkey Secret 대신 테넌트 전용 SecretProviderClass로 Secret Manager를 마운트하고, `/id`가 notiflex의 Valkey에 크로스 네임스페이스로 붙는 것까지 검증 |

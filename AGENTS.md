@@ -43,6 +43,11 @@ repository.
 - `k8s/kafka/`: Strimzi `Kafka`, `KafkaNodePool`, and `KafkaTopic` custom resources
 - `k8s/monitoring/`: Grafana datasource/dashboard ConfigMaps and the PrometheusRule
 - `helm-values/`: Helm values for kube-prometheus-stack, Loki, Fluent Bit, Valkey, Strimzi, and Tempo
+- `claude-context/architecture.md`: a one-page snapshot of how the system currently works — topology,
+  component flow, pipeline, observability, namespaces. Read it to get oriented; update it when the
+  shape of the system changes. It holds no reasoning: why a thing was chosen belongs in
+  `docs/architecture-decisions.md`, and what happened along the way belongs in `JOURNEY.md`. The
+  directory name comes from the textbook and is kept for compatibility.
 - `command-guardrails/`: step-by-step procedures for the operations that are hard to undo — deleting
   a Kafka topic, running a CronJob by hand, removing a tenant namespace. Read the matching file
   before performing one of these, and add a file in the same three-part shape when a new hazardous
