@@ -27,8 +27,8 @@
 | ch6 | 6.2 시크릿 관리 | ✅ | 2026-07-20 | Workload Identity와 GKE 관리형 Secret Manager CSI Driver 구성. Valkey 비밀번호를 Secret Manager에 이관하고 v0.2.2에서 읽기 전용 파일 마운트(`/mnt/secrets/valkey-password`) 검증 |
 | ch6 | 6.3 Canary 전환 | ✅ | 2026-07-20 | Argo Rollouts Canary(20%→50%→80%→100%, 각 30초) 전환. v0.2.3 실배포 후 자동 진행·승격 검증 |
 | ch7 | 7.2 멀티 노드풀 | ✅ | 2026-07-27 | 역할별 Spot 노드풀 api-pool(e2-medium)·worker-pool(e2-standard-2)·ops-pool(e2-small) 생성. Rollout에 `cloud.google.com/gke-nodepool: api-pool` nodeSelector 적용해 API Pod 2개가 api-pool에 배치됨을 확인. 전용 노드 확보로 replicas 1→2, PDB `minAvailable` 0→1 복원 |
-| ch7 | 7.3 App of Apps | ⬜ | | |
-| ch7 | 7.4 멀티테넌시 | ⬜ | | |
+| ch7 | 7.3 App of Apps | ✅ | 2026-07-27 | `argocd/root-app.yaml`이 `argocd/apps/`를 감시(`directory.recurse`)하는 App of Apps 구성. 기존 `notiflex-smb`를 `argocd/apps/`로 이동하고, 수동 `kubectl apply`로 관리하던 `k8s/monitoring/`을 `notiflex-monitoring` Application으로 편입. sync-wave 1(플랫폼)→2(앱) |
+| ch7 | 7.4 멀티테넌시 | ✅ | 2026-07-27 | `enterprise` 네임스페이스에 별도 Rollout/Service/SA 배포. `argocd/apps/notiflex-enterprise.yaml`을 root-app이 자동 감지해 Application 생성(`CreateNamespace=true`). 교재의 커밋된 Valkey Secret 대신 테넌트 전용 SecretProviderClass로 Secret Manager를 마운트하고, `/id`가 notiflex의 Valkey에 크로스 네임스페이스로 붙는 것까지 검증 |
 | ch8 | 8.1 메시징 | ⬜ | | |
 | ch8 | 8.2 트레이싱 | ⬜ | | |
 | ch8 | 8.3 CronJob | ⬜ | | |
@@ -58,6 +58,8 @@
 | 배포 전략 전환 (ch6.3) | Argo Rollouts Canary | Blue/Green 유지, Rolling Update | 같은 Rollout CRD와 stable/preview Service를 재사용하면서 20%→50%→80% 단계별 관찰 구간을 두어 새 버전 노출 위험을 줄인다. 별도 배포 도구는 추가하지 않는다 |
 | 캐시 (ch6.1) | Valkey standalone | Redis, Memcached, DragonflyDB | Redis 호환 `INCR`로 Pod 간 원자적 ID 생성을 보장하고 BSD 라이선스를 유지한다. 2노드 학습 환경에는 50m/64Mi 요청과 1Gi PVC의 단일 인스턴스가 적합 |
 | 노드 배치 (ch7.2) | nodeSelector + 역할별 노드풀 | taint/toleration, nodeAffinity, topologySpreadConstraints | GKE가 노드풀 이름을 `cloud.google.com/gke-nodepool` 라벨로 자동 부여하므로 매니페스트에 한 줄만 추가하면 된다. 단일 존 학습 클러스터에서 taint/affinity는 과도하다. 대신 nodeSelector는 다른 Pod의 진입을 막지 못한다는 한계를 감수한다 |
+| 다수 앱 관리 (ch7.3) | App of Apps (root-app) | ApplicationSet, Application 수동 관리 | `argocd/apps/`에 YAML을 넣으면 앱이 생긴다는 개념이 직관적이고 순수 YAML만 쓴다. 관리 대상이 5~7개 수준이라 ApplicationSet의 템플릿 이점이 크지 않다 |
+| 멀티테넌시 (ch7.4) | Namespace 분리 + per-tenant Rollout | 단일 namespace + 라벨 격리, vCluster | 강한 격리, ArgoCD App of Apps와 자연 결합, 테넌트별 독립 배포 |
 | 시크릿 관리 (ch6.2) | GKE Secret Manager CSI + Workload Identity | K8s Secret, Sealed Secrets, External Secrets Operator | GKE 네이티브 Workload Identity로 키 파일 없이 Secret Manager를 읽고, CSI 파일 마운트로 앱 환경변수·Git에 비밀번호를 복제하지 않는다 |
 
 ## 현재 버전
@@ -83,7 +85,7 @@
 | 노드풀 | 머신 타입 | 노드 수 | 주요 워크로드 |
 |--------|----------|---------|-------------|
 | default-pool | e2-medium (Spot), pd-balanced 30GB | 2 | 관측 스택(Prometheus/Grafana/Loki/Fluent Bit), ArgoCD, Argo Rollouts, kube-system |
-| api-pool (ch7.2) | e2-medium (Spot), pd-standard 50GB | 1 | notiflex-api Rollout ×2 (nodeSelector). 여유 용량 때문에 valkey-primary도 현재 이 노드에 배치됨 |
+| api-pool (ch7.2) | e2-medium (Spot), pd-standard 50GB | 1 | notiflex 테넌트 Rollout ×2 + enterprise 테넌트 Rollout ×1 (모두 nodeSelector). 여유 용량 때문에 valkey-primary도 현재 이 노드에 배치됨 |
 | worker-pool (ch7.2) | e2-standard-2 (Spot), pd-standard 50GB | 1 | ch8 Kafka 배치 예정 |
 | ops-pool (ch7.2) | e2-small (Spot), pd-standard 50GB | 1 | ch8 CronJob 배치 예정 |
 
@@ -114,6 +116,7 @@
 | ch5 | Regional external Gateway 생성 전 서울 리전에 proxy-only 서브넷이 없음 | `default` 네트워크에 `REGIONAL_MANAGED_PROXY` 용도의 `proxy-only-subnet`(`172.16.0.0/23`)을 생성한 뒤 Gateway가 외부 IP를 할당받음 |
 | ch5 | `kubectl argo rollouts` 플러그인 조회에서 컨텍스트를 생략해 기본 회사 AWS 컨텍스트의 OIDC 인증이 시도됨 | 세션 시작 시 기본 컨텍스트를 `notiflex-gke`로 확인·전환하고, 플러그인 명령에도 `--context notiflex-gke`를 반드시 붙인다. 일반 `kubectl`도 계속 `--context notiflex-gke`를 사용 |
 | ch7 | `kubectl --context notiflex-gke argo rollouts status ...`가 `flags cannot be placed before plugin name`으로 실패 | kubectl 플러그인은 플래그를 플러그인 이름 뒤에만 받는다. `kubectl argo rollouts status notiflex-api -n notiflex --context notiflex-gke` 순서로 쓴다 (ch5 기록의 명령 형식을 이에 맞춰 정정) |
+| ch7 | enterprise 테넌트 Pod이 GCP Secret Manager를 못 읽어 기동 실패할 뻔함 | Workload Identity 바인딩은 `namespace/serviceaccount` 단위라 네임스페이스를 추가하면 GCP 쪽에도 `...svc.id.goog[enterprise/notiflex-api]`를 `roles/iam.workloadIdentityUser`로 추가해야 한다. IAM 정책 변경은 Claude Code 자동 승인 분류기에 차단되어 사용자가 직접 실행 |
 | ch7 | nodeSelector를 api-pool로 지정한 뒤 `valkey-primary`도 같은 api-pool 노드에 배치됨 | nodeSelector는 "이 노드로 가라"만 지시하고 다른 Pod의 진입을 막지 못한다(거부하려면 taint/toleration 필요). 학습 범위에서는 그대로 두고, ch8에서 워크로드가 늘면 데이터·워커 계열 배치를 재검토한다 |
 | ch5 | v0.2.0 CI가 `rollout.yaml`을 main에 먼저 커밋해 문서 푸시가 non-fast-forward로 거절됨 | 원격의 CI 커밋 범위를 확인한 뒤 `git rebase --autostash origin/main`으로 사용자 작업을 보존하며 문서 커밋을 재배치. force push는 사용하지 않음 |
 | ch6 | Bitnami Valkey chart 6.2.0이 `bitnami/valkey:latest` 롤링 태그 경고를 표시 | 학습 환경에서는 chart 6.2.0을 고정해 사용. 운영 전환 시에는 이미지 digest 또는 지원되는 고정 이미지 태그로 검토 필요 |

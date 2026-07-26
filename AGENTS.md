@@ -35,11 +35,15 @@ repository.
 ## Repository Layout
 
 - `app/`: Python source, tests, Dockerfile, `pyproject.toml`, and `uv.lock`
-- `k8s/smb/`: ArgoCD-managed Rollout, traffic, monitoring-discovery, and secret-mount manifests
-- `k8s/monitoring/`: monitoring manifests applied directly with `kubectl apply`
+- `k8s/smb/`: SMB tenant — Rollout, traffic, monitoring-discovery, and secret-mount manifests
+- `k8s/enterprise/`: Enterprise tenant — Rollout, Service, ServiceAccount, and SecretProviderClass
+- `k8s/monitoring/`: Grafana datasource/dashboard ConfigMaps and the PrometheusRule
 - `helm-values/`: Helm values for kube-prometheus-stack, Loki, Fluent Bit, and Valkey
 - `.github/workflows/`: CI pipeline
-- `argocd/`: ArgoCD Application definition
+- `argocd/root-app.yaml`: the App of Apps root; apply it by hand, and it manages everything else
+- `argocd/apps/`: one Application per managed path. Adding a file here is how a new app is
+  registered — `root-app` watches the directory recursively. Keep `argocd/` itself free of other
+  Application manifests so the root does not sync itself.
 
 ## Paused Cluster: Resume Only for Requested Work
 
@@ -128,10 +132,24 @@ gcloud container clusters resize notiflex-cluster --node-pool default-pool \
 - The `notiflex-api` PodDisruptionBudget is back to `minAvailable: 1`. Because `api-pool` has a
   single node, lower it temporarily when that node must be drained.
 
+## Tenants
+
+- `notiflex` is the SMB tenant and `enterprise` is the Enterprise tenant. Each has its own
+  namespace, Rollout, Service, and ServiceAccount, and each is a separate ArgoCD Application.
+- Both tenants read the Valkey password from the same Secret Manager entry through their own
+  `SecretProviderClass`. A tenant's Kubernetes ServiceAccount must be bound to the
+  `notiflex-secrets` GCP service account as `PROJECT.svc.id.goog[<namespace>/notiflex-api]` before
+  its pods can start. Adding a tenant means adding that binding too.
+- Valkey itself lives only in `notiflex`; other tenants reach it at
+  `valkey-primary.notiflex.svc.cluster.local:6379`. The namespaces separate compute, not data —
+  every tenant currently shares one `/id` counter. Per-tenant key prefixes or separate instances
+  are still open work.
+
 ## Observability
 
-- The `monitoring` namespace contains Helm-installed kube-prometheus-stack, Loki, and Fluent Bit;
-  it is not ArgoCD-managed.
+- The `monitoring` namespace contains Helm-installed kube-prometheus-stack, Loki, and Fluent Bit.
+  Helm still owns those releases, but since ch7.3 the manifests in `k8s/monitoring/` are ArgoCD's
+  through the `notiflex-monitoring` Application, so edit them in Git rather than with `kubectl`.
 - Prometheus scrapes the FastAPI instrumentator's `/metrics` endpoint through
   `k8s/smb/servicemonitor.yaml` (`release: kube-prometheus`). Loki runs as SingleBinary and Fluent Bit
   runs as a DaemonSet; Grafana has a non-default Loki datasource and LogQL uses `{namespace="notiflex"}`.
