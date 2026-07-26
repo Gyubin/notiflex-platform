@@ -48,6 +48,10 @@ repository.
   shape of the system changes. It holds no reasoning: why a thing was chosen belongs in
   `docs/architecture-decisions.md`, and what happened along the way belongs in `JOURNEY.md`. The
   directory name comes from the textbook and is kept for compatibility.
+- `ONBOARDING.md`: the entry point for someone new to the repository — cluster layout, access,
+  deployment flow, a Q&A section, and the limits worth knowing before touching anything. It restates
+  what the other documents own rather than holding anything of its own, so refresh it whenever the
+  architecture snapshot changes.
 - `command-guardrails/`: step-by-step procedures for the operations that are hard to undo — deleting
   a Kafka topic, running a CronJob by hand, removing a tenant namespace. Read the matching file
   before performing one of these, and add a file in the same three-part shape when a new hazardous
@@ -68,6 +72,13 @@ the cluster is sometimes already running.
 **`root-app` comes first when disabling sync and last when re-enabling it.** It manages the child
 Application resources, `syncPolicy` included, so a child whose automation you switched off gets it
 restored from Git while the root is still self-healing.
+
+**Wait until every resized pool's nodes are `Ready` before re-enabling automated sync.** The pools
+come back one at a time, three to five minutes apart, while the Pod objects survive the pause as
+`Pending` and get scheduled the instant their node appears. Turn sync on early and `notiflex-api`
+starts on `api-pool` before the Kafka broker exists on `worker-pool`; both it and Strimzi's
+`entity-operator` then crash-loop for about ten minutes before recovering on their own. Nothing
+breaks, but the restarts are avoidable.
 
 To resume, explain the impact first, then run this, resizing only the pools the work needs
 (`default-pool` 2, `api-pool` 1, `worker-pool` 1, `ops-pool` 1):

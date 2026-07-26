@@ -18,6 +18,10 @@ It is shared by all coding agents. `/update-docs` remains a Claude Code command 
        GKE managed instance group's target size without resuming worker nodes.
    - `AGENTS.md`: update project rules or context when the working contract changed. Keep `CLAUDE.md`
      as the thin compatibility adapter.
+   - `README.md` and `ONBOARDING.md`: the human-facing pair. Refresh the status list, the
+     configuration table, the directory tree, and the deployed image tag. These went stale for two
+     chapters because earlier passes updated only the agent-facing documents — check them explicitly
+     rather than assuming a chapter left them untouched.
    - `docs/architecture-decisions.md`, when it exists: add every new decision from `JOURNEY.md` in
      order, using the next ADR number and a decision statement plus three to four reason bullets.
    - `claude-context/`, when the textbook has introduced it: update the current architecture snapshot

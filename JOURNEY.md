@@ -34,11 +34,11 @@
 | ch8 | 8.1 메시징 | ✅ | 2026-07-27 | Strimzi 1.1.0 operator + Kafka 4.3.0 단일 브로커(KRaft, controller/broker 겸용)를 worker-pool에 배치. `notifications` 토픽(3파티션). FastAPI에 aiokafka Producer/Consumer 추가해 `/id`가 Valkey INCR 후 이벤트를 발행하고, 같은 Pod의 백그라운드 Consumer가 수신. v0.3.0 배포 후 앱 로그 누락을 발견해 v0.3.1로 수정. `argocd/apps/notiflex-kafka.yaml`을 root-app이 자동 감지 |
 | ch8 | 8.2 트레이싱 | ✅ | 2026-07-27 | Grafana Tempo 2.9.0(SingleBinary)을 ops-pool에 설치하고 OTLP gRPC(4317) 수집. OTel Python SDK 1.39.0 + FastAPI 자동 계측에 `valkey.incr`·`kafka.publish` 수동 span을 더해 v0.4.0 배포. `GET /id` 트레이스에서 전체 6.80ms 중 Valkey 0.80ms·Kafka 2.96ms로 구간이 갈리는 것을 확인. `service.namespace`에 테넌트를 실어 Grafana에서 smb/enterprise를 나눠 조회 |
 | ch8 | 8.3 CronJob | ✅ | 2026-07-27 | `notiflex-healthcheck` CronJob(`*/5 * * * *`)을 ops-pool에 배치. Service DNS로 `/health`를 호출해 200이 아니면 실패로 종료한다. `concurrencyPolicy: Forbid`로 앞 실행이 밀렸을 때 중복 실행을 막고, `k8s/smb/`에 두어 ArgoCD가 관리 |
-| ch9 | 9.1 저장소 분석 | ⬜ | | |
-| ch9 | 9.2 회고 | ⬜ | | |
-| ch9 | 9.3 온보딩 문서 | ⬜ | | |
-| ch9 | 9.4 GitAIOps 분석 | ⬜ | | |
-| ch9 | 9.5 마무리 | ⬜ | | |
+| ch9 | 9.1 저장소 분석 | ✅ | 2026-07-27 | 91커밋·릴리스 태그 10개·추적 파일 61개(첫 커밋 07-05 이래 22일). 코드 475줄 : 매니페스트 1,171줄 : 문서 1,941줄. ch8 종료 직후 중단했던 클러스터를 재개해 Application 5개가 전부 `Synced`+`Healthy`임을 확인(수동 apply 잔재 없음). 외부 IP에서 `/version` v0.4.0, `/id` 28 응답 — 중단 중에도 Valkey PVC의 카운터가 보존됨. 대조 과정에서 README.md가 ch6에서 정지(v0.2.3·단일 노드풀 기준), `app/pyproject.toml`의 `version`이 0.1.4에 멈춘 것을 발견 |
+| ch9 | 9.2 회고 | ✅ | 2026-07-27 | CLAUDE.md 28→120줄 성장 후 ch6에서 AGENTS.md로 이관(5줄로 축소), AGENTS.md는 180→273줄. 늘어난 줄의 대부분이 실제 사고 후 추가된 예방 규칙. 반복된 선택 기준 4가지(GKE/managed 우선, Argo 생태계 통일, Grafana 통합 관측, GitOps 호환) 추출. 재선택 검토 항목으로 CSI vs Sealed Secrets, Canary 도입 시점, Valkey Streams vs Kafka, 그리고 Helm 소유 6개 릴리스가 GitOps 밖에 남은 이원화 문제를 기록 |
+| ch9 | 9.3 온보딩 문서 | ✅ | 2026-07-27 | `ONBOARDING.md` 생성(약 320줄). 실제 `kubectl` 조회 기반 노드풀·네임스페이스 현황, 접근 방법(ArgoCD·Grafana·API), 배포 플로우, Q&A 7개. 교재 요구사항에 "알고 있어야 할 한계" 절과 증상별 원인 표(트러블슈팅 38건 압축)를 추가 |
+| ch9 | 9.4 GitAIOps 분석 | ✅ | 2026-07-27 | Git=결정의 저장소, AI=누적 맥락의 소비자, Ops=Git이 진실임을 재개로 증명. 장별 커밋 수(ch2 31 → ch4 5)로 루프 가속을 확인하고, ch6의 12커밋이 문서 구조 재편 비용이었으며 그 덕에 ch7이 6커밋으로 끝났음을 짚음. 한계로 "기록하는 습관에 전적으로 의존" 명시(ch6.4 소급, README 방치가 사례) |
+| ch9 | 9.5 마무리 | ✅ | 2026-07-27 | 다음 단계 5개 영역 제안. 우선순위는 NetworkPolicy(네임스페이스는 갈랐으나 네트워크는 안 갈림)와 Alertmanager 외부 채널 연결(현재 null receiver). KEDA는 메시지 키가 테넌트로 고정된 구조에서는 효과가 없어 키 변경이 선행 작업임을 기록 |
 
 ## 도구 선택 기록
 
@@ -101,6 +101,8 @@
 
 ch8 이후 클러스터에는 `kafka` 네임스페이스(Strimzi operator + 브로커 + entity-operator)와 `monitoring`의 Tempo, `notiflex`의 헬스체크 CronJob이 추가됐다. ArgoCD Application은 `root-app`, `notiflex-smb`, `notiflex-enterprise`, `notiflex-monitoring`, `notiflex-kafka` 5개다.
 
+> **운영 주의 (2026-07-27 ch9 종료 시점: 중단됨)**: ch9.1의 클러스터 ↔ Git 일치 확인을 위해 노드풀 4개(총 5노드)를 재개해 Application 5개가 모두 `Synced`+`Healthy`임을 확인하고, 외부 IP에서 `/version` v0.4.0과 `/id` 28을 응답받은 뒤 같은 절차로 다시 중단했다. **재개할 때는 노드 5대가 전부 `Ready`가 된 뒤에 auto-sync를 켠다** — 먼저 켜면 API Pod이 Kafka 브로커보다 앞서 떠서 10분간 CrashLoop을 돈다(트러블슈팅 이력 ch9 항목 참조). 상태는 아래 ch8 종료 시점과 동일하다.
+>
 > **운영 주의 (2026-07-27 ch8 종료 시점: 중단됨)**: 노드풀 4개 전부 0, Application 5개 auto-sync 비활성, 헬스체크 CronJob suspend 상태다. PVC 3개(Kafka 5Gi·Loki 2Gi·Valkey 1Gi)는 그대로 남아 있어 재개하면 카운터·로그·미수신 메시지가 살아 있다. 중단·재개 절차는 AGENTS.md "Paused Cluster" 참조. **root-app은 끌 때 가장 먼저, 켤 때 가장 마지막**이다. api-pool은 노드가 1개이므로 그 노드를 드레인해야 할 때는 `notiflex-api` PDB의 `minAvailable`을 임시로 0으로 낮춘다.
 
 ## 트러블슈팅 이력
@@ -146,3 +148,5 @@ ch8 이후 클러스터에는 `kafka` 네임스페이스(Strimzi operator + 브�
 | ch8 | 중단 절차가 App of Apps 이전 기준이라 그대로 쓰면 auto-sync가 되살아남 | root-app이 자식 Application의 `spec.syncPolicy`까지 관리하므로, 자식만 끄면 root-app selfHeal이 Git의 `automated`를 복원한다. **끌 때는 root-app 먼저, 켤 때는 root-app 마지막.** 대상도 `notiflex-smb` 하나가 아니라 Application 5개 전부다 |
 | ch8 | 중단 시 CronJob이 살아 있으면 죽은 API에 계속 요청해 실패 Job이 쌓임 | 노드풀을 내리기 전에 `kubectl patch cronjob ... -p '{"spec":{"suspend":true}}'`로 정지시킨다. ch8에서 새로 생긴 절차 항목 |
 | ch8 | 릴리스 태그 push 후 문서 커밋이 non-fast-forward로 거절 (ch5와 동일 재발) | CI가 `ci: deploy ...` 커밋을 main에 먼저 올린다. `git rebase --autostash origin/main`으로 재배치. 태그를 밀기 전에 `git fetch`부터 하는 습관이 필요 |
+| ch9 | 재개 직후 `notiflex-api` 2개와 Kafka `entity-operator`가 10분간 CrashLoopBackOff (각 6~7회 재시작) | 기동 순서 경합이다. 노드풀을 순차로 resize하면 노드가 3~5분 간격으로 올라오는데, Pod 객체는 노드가 없는 동안에도 Pending으로 살아 있다가 노드가 붙는 즉시 스케줄된다. 그래서 api-pool의 API Pod이 worker-pool의 Kafka 브로커보다 먼저 뜬다. entity-operator도 브로커보다 먼저 떠서 Exit 0으로 정상 종료를 반복했다. 둘 다 백오프 끝에 자연 복구되므로 조치는 불필요하지만, **재개 절차에 "노드 5대가 모두 Ready가 된 뒤 auto-sync를 켠다"는 순서를 명시**해야 불필요한 CrashLoop을 피한다. API Pod의 Exit 137은 메모리 초과가 아니다(실사용 57Mi / limit 128Mi) — Kafka 접속 실패로 프로세스가 죽은 뒤 liveness probe가 connection refused를 보고 재시작을 건 것 |
+| ch9 | 저장소 대조에서 README.md가 ch6 시점(v0.2.3·단일 노드풀·Application 1개)에 멈춰 있는 것을 발견 | ch7·ch8의 `/update-docs`가 에이전트용 문서(AGENTS.md, architecture.md, JOURNEY.md)만 갱신하고 사람이 읽는 README를 대상에서 빠뜨렸다. 문서 갱신 절차의 대상 목록에 README를 명시해야 한다. `app/pyproject.toml`의 `version`도 0.1.4에 멈춰 있으나 실제 버전은 git 태그와 `APP_VERSION`이 결정하므로 동작 영향은 없다 |
