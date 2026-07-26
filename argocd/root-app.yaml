@@ -1,22 +1,22 @@
 apiVersion: argoproj.io/v1alpha1
 kind: Application
 metadata:
-  name: notiflex-smb
+  name: root-app
   namespace: argocd
-  finalizers:
-    - resources-finalizer.argocd.argoproj.io
 spec:
   project: default
   source:
     repoURL: https://github.com/Gyubin/notiflex-platform.git
     targetRevision: main
-    path: k8s/smb
+    # argocd/ 직속이 아니라 argocd/apps/만 감시한다.
+    # 루트가 자기 자신을 sync 대상으로 잡는 순환을 피하기 위함이다.
+    path: argocd/apps
+    directory:
+      recurse: true
   destination:
     server: https://kubernetes.default.svc
-    namespace: notiflex
+    namespace: argocd
   syncPolicy:
     automated:
       prune: true
       selfHeal: true
-    syncOptions:
-      - CreateNamespace=true

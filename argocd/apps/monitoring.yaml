@@ -1,0 +1,24 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: notiflex-monitoring
+  namespace: argocd
+  annotations:
+    # 0: 인프라, 1: 플랫폼, 2: 애플리케이션
+    # Grafana 데이터소스·대시보드와 알림 규칙은 앱보다 먼저 준비되어야 한다.
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Gyubin/notiflex-platform.git
+    targetRevision: main
+    path: k8s/monitoring
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: monitoring
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
