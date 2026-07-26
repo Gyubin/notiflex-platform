@@ -29,6 +29,7 @@
 | ch7 | 7.2 멀티 노드풀 | ✅ | 2026-07-27 | 역할별 Spot 노드풀 api-pool(e2-medium)·worker-pool(e2-standard-2)·ops-pool(e2-small) 생성. Rollout에 `cloud.google.com/gke-nodepool: api-pool` nodeSelector 적용해 API Pod 2개가 api-pool에 배치됨을 확인. 전용 노드 확보로 replicas 1→2, PDB `minAvailable` 0→1 복원 |
 | ch7 | 7.3 App of Apps | ✅ | 2026-07-27 | `argocd/root-app.yaml`이 `argocd/apps/`를 감시(`directory.recurse`)하는 App of Apps 구성. 기존 `notiflex-smb`를 `argocd/apps/`로 이동하고, 수동 `kubectl apply`로 관리하던 `k8s/monitoring/`을 `notiflex-monitoring` Application으로 편입. sync-wave 1(플랫폼)→2(앱) |
 | ch7 | 7.4 멀티테넌시 | ✅ | 2026-07-27 | `enterprise` 네임스페이스에 별도 Rollout/Service/SA 배포. `argocd/apps/notiflex-enterprise.yaml`을 root-app이 자동 감지해 Application 생성(`CreateNamespace=true`). 교재의 커밋된 Valkey Secret 대신 테넌트 전용 SecretProviderClass로 Secret Manager를 마운트하고, `/id`가 notiflex의 Valkey에 크로스 네임스페이스로 붙는 것까지 검증 |
+| ch7 | 💡 settings.local.json 권한 분리 | ✅ | 2026-07-27 | `.claude/settings.local.json`으로 deny/ask 체험. 교재 규칙 `Bash(kubectl delete *)`가 이 저장소에서는 매칭되지 않아 삭제가 실제로 실행됨(ArgoCD selfHeal로 복구). 실제 명령 형태에 맞춘 규칙으로 차단 확인 후 파일 삭제해 원상 복구. `ask` 시연은 worker-pool 실삭제 위험이 있어 생략 |
 | ch8 | 8.1 메시징 | ⬜ | | |
 | ch8 | 8.2 트레이싱 | ⬜ | | |
 | ch8 | 8.3 CronJob | ⬜ | | |
@@ -116,6 +117,7 @@
 | ch5 | Regional external Gateway 생성 전 서울 리전에 proxy-only 서브넷이 없음 | `default` 네트워크에 `REGIONAL_MANAGED_PROXY` 용도의 `proxy-only-subnet`(`172.16.0.0/23`)을 생성한 뒤 Gateway가 외부 IP를 할당받음 |
 | ch5 | `kubectl argo rollouts` 플러그인 조회에서 컨텍스트를 생략해 기본 회사 AWS 컨텍스트의 OIDC 인증이 시도됨 | 세션 시작 시 기본 컨텍스트를 `notiflex-gke`로 확인·전환하고, 플러그인 명령에도 `--context notiflex-gke`를 반드시 붙인다. 일반 `kubectl`도 계속 `--context notiflex-gke`를 사용 |
 | ch7 | `kubectl --context notiflex-gke argo rollouts status ...`가 `flags cannot be placed before plugin name`으로 실패 | kubectl 플러그인은 플래그를 플러그인 이름 뒤에만 받는다. `kubectl argo rollouts status notiflex-api -n notiflex --context notiflex-gke` 순서로 쓴다 (ch5 기록의 명령 형식을 이에 맞춰 정정) |
+| ch7 | 교재의 `Bash(kubectl delete *)` deny 규칙이 동작하지 않아 enterprise Rollout이 실제로 삭제됨 | 이 저장소는 AGENTS.md 규칙 6에 따라 모든 명령이 `kubectl --context notiflex-gke delete ...` 형태라 `kubectl delete`로 시작하지 않는다. 규칙은 명령의 실제 접두사와 일치해야 한다. `Bash(kubectl --context notiflex-gke delete *)`를 추가하니 차단됨. 삭제된 Rollout은 ArgoCD selfHeal이 복구 |
 | ch7 | enterprise 테넌트 Pod이 GCP Secret Manager를 못 읽어 기동 실패할 뻔함 | Workload Identity 바인딩은 `namespace/serviceaccount` 단위라 네임스페이스를 추가하면 GCP 쪽에도 `...svc.id.goog[enterprise/notiflex-api]`를 `roles/iam.workloadIdentityUser`로 추가해야 한다. IAM 정책 변경은 Claude Code 자동 승인 분류기에 차단되어 사용자가 직접 실행 |
 | ch7 | nodeSelector를 api-pool로 지정한 뒤 `valkey-primary`도 같은 api-pool 노드에 배치됨 | nodeSelector는 "이 노드로 가라"만 지시하고 다른 Pod의 진입을 막지 못한다(거부하려면 taint/toleration 필요). 학습 범위에서는 그대로 두고, ch8에서 워크로드가 늘면 데이터·워커 계열 배치를 재검토한다 |
 | ch5 | v0.2.0 CI가 `rollout.yaml`을 main에 먼저 커밋해 문서 푸시가 non-fast-forward로 거절됨 | 원격의 CI 커밋 범위를 확인한 뒤 `git rebase --autostash origin/main`으로 사용자 작업을 보존하며 문서 커밋을 재배치. force push는 사용하지 않음 |
