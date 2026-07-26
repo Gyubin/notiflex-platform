@@ -4,9 +4,8 @@ metadata:
   name: notiflex-api
   namespace: notiflex
 spec:
-  # ch6의 Valkey와 이후 CSI DaemonSet을 2노드 e2-medium 환경에 수용하기 위해
-  # ch7 노드풀 확장 전까지 단일 replica로 운영한다.
-  replicas: 1
+  # ch7.2에서 api-pool 전용 노드를 확보해 ch6의 단일 replica 제약을 해제했다.
+  replicas: 2
   revisionHistoryLimit: 2
   selector:
     matchLabels:
@@ -16,6 +15,10 @@ spec:
       labels:
         app: notiflex-api
     spec:
+      # ch7.2: API Pod을 api-pool 전용 노드에만 배치한다.
+      # GKE가 노드풀 이름을 이 라벨로 자동 부여하므로 커스텀 라벨은 쓰지 않는다.
+      nodeSelector:
+        cloud.google.com/gke-nodepool: api-pool
       serviceAccountName: notiflex-api
       containers:
         - name: notiflex-api
