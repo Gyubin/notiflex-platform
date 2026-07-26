@@ -101,7 +101,7 @@
 
 ch8 이후 클러스터에는 `kafka` 네임스페이스(Strimzi operator + 브로커 + entity-operator)와 `monitoring`의 Tempo, `notiflex`의 헬스체크 CronJob이 추가됐다. ArgoCD Application은 `root-app`, `notiflex-smb`, `notiflex-enterprise`, `notiflex-monitoring`, `notiflex-kafka` 5개다.
 
-> **운영 주의**: 현재 5노드로 가동 중이며 `notiflex-smb` auto-sync가 켜져 있다. 중단할 때는 auto-sync 비활성화 → Rollout replica 0 → 노드 풀 0 순서를 지킨다 (AGENTS.md "Paused Cluster" 참조). 재개 시에는 노드 풀 복구 후 auto-sync 재활성화와 hard refresh가 필요하다. api-pool은 노드가 1개이므로 그 노드를 드레인해야 할 때는 `notiflex-api` PDB의 `minAvailable`을 임시로 0으로 낮춘다.
+> **운영 주의 (2026-07-27 ch8 종료 시점: 중단됨)**: 노드풀 4개 전부 0, Application 5개 auto-sync 비활성, 헬스체크 CronJob suspend 상태다. PVC 3개(Kafka 5Gi·Loki 2Gi·Valkey 1Gi)는 그대로 남아 있어 재개하면 카운터·로그·미수신 메시지가 살아 있다. 중단·재개 절차는 AGENTS.md "Paused Cluster" 참조. **root-app은 끌 때 가장 먼저, 켤 때 가장 마지막**이다. api-pool은 노드가 1개이므로 그 노드를 드레인해야 할 때는 `notiflex-api` PDB의 `minAvailable`을 임시로 0으로 낮춘다.
 
 ## 트러블슈팅 이력
 
@@ -143,4 +143,6 @@ ch8 이후 클러스터에는 `kafka` 네임스페이스(Strimzi operator + 브�
 | ch8 | Tempo 차트 기본값 `memBallastSizeMbs: 1024`가 e2-small(가용 1391Mi)에 과함 | 볼러스트는 GC를 늦춰 지연을 줄이는 장치라 학습 규모에서는 필요 없다. `0`으로 두고 requests 192Mi/limits 384Mi로 배치. 실사용량은 22Mi에 그쳤다 |
 | ch8 | Tempo values에서 `receivers.jaeger: null`로 미사용 수신기를 끄려다 차트 렌더링 실패 | `nil pointer evaluating interface {}.protocols`. Service 템플릿(`_ports.tpl`)이 값의 존재 여부를 확인하지 않고 jaeger 포트를 참조한다. deprecated 차트라 수정될 가능성이 낮아 기본 수신기를 그대로 두기로 결정 |
 | ch8 | Grafana 데이터소스 uid가 자동 생성되어 매번 바뀜 | 프로비저닝 YAML에 `uid`를 안 적으면 Grafana가 임의 값(`P214B5B846CF3925F`)을 만든다. 대시보드·링크가 uid로 데이터소스를 참조하므로 재생성 시 깨진다. `uid: tempo`로 고정 |
+| ch8 | 중단 절차가 App of Apps 이전 기준이라 그대로 쓰면 auto-sync가 되살아남 | root-app이 자식 Application의 `spec.syncPolicy`까지 관리하므로, 자식만 끄면 root-app selfHeal이 Git의 `automated`를 복원한다. **끌 때는 root-app 먼저, 켤 때는 root-app 마지막.** 대상도 `notiflex-smb` 하나가 아니라 Application 5개 전부다 |
+| ch8 | 중단 시 CronJob이 살아 있으면 죽은 API에 계속 요청해 실패 Job이 쌓임 | 노드풀을 내리기 전에 `kubectl patch cronjob ... -p '{"spec":{"suspend":true}}'`로 정지시킨다. ch8에서 새로 생긴 절차 항목 |
 | ch8 | 릴리스 태그 push 후 문서 커밋이 non-fast-forward로 거절 (ch5와 동일 재발) | CI가 `ci: deploy ...` 커밋을 main에 먼저 올린다. `git rebase --autostash origin/main`으로 재배치. 태그를 밀기 전에 `git fetch`부터 하는 습관이 필요 |

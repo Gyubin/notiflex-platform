@@ -60,38 +60,62 @@ repository.
 
 ## Paused Cluster: Resume Only for Requested Work
 
-Between chapters the node pools are scaled to zero to save cost and the `notiflex-smb` ArgoCD
-application's automated sync is disabled. Documentation-only work must not resume the cluster.
-Before a requested chapter needs a live cluster, explain the impact and perform the following
-recovery sequence, repeating the resize for every pool the chapter needs (`default-pool` 2,
-`api-pool` 1, `worker-pool` 1, `ops-pool` 1):
+Between chapters every node pool is scaled to zero to save cost, automated sync is disabled on all
+five ArgoCD applications, and the healthcheck CronJob is suspended. Documentation-only work must not
+resume the cluster. Check `kubectl --context notiflex-gke get nodes` before assuming either state —
+the cluster is sometimes already running.
+
+**`root-app` comes first when disabling sync and last when re-enabling it.** It manages the child
+Application resources, `syncPolicy` included, so a child whose automation you switched off gets it
+restored from Git while the root is still self-healing.
+
+To resume, explain the impact first, then run this, resizing only the pools the work needs
+(`default-pool` 2, `api-pool` 1, `worker-pool` 1, `ops-pool` 1):
 
 ```bash
 gcloud container clusters resize notiflex-cluster --node-pool default-pool \
   --num-nodes 2 --zone asia-northeast3-a \
   --project project-b3c5c78c-8a5c-4e47-9fe --quiet
 
-kubectl --context notiflex-gke patch application notiflex-smb -n argocd --type merge \
-  -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
+# children first, root last
+for app in notiflex-smb notiflex-enterprise notiflex-monitoring notiflex-kafka root-app; do
+  kubectl --context notiflex-gke patch application "$app" -n argocd --type merge \
+    -p '{"spec":{"syncPolicy":{"automated":{"prune":true,"selfHeal":true}}}}'
+  kubectl --context notiflex-gke annotate application "$app" -n argocd \
+    argocd.argoproj.io/refresh=hard --overwrite
+done
 
-kubectl --context notiflex-gke annotate application notiflex-smb -n argocd \
-  argocd.argoproj.io/refresh=hard --overwrite
+kubectl --context notiflex-gke patch cronjob notiflex-healthcheck -n notiflex \
+  -p '{"spec":{"suspend":false}}'
 ```
 
-To pause it again, first disable automated sync, then scale the `notiflex-api` Rollout to zero, then resize
-the node pool to zero. Do not reverse that order: ArgoCD self-heal and the PDB can otherwise block
-node draining.
+To pause it again, disable automated sync, then suspend the CronJob and scale both tenants' Rollouts
+to zero, then resize the pools. Do not reverse that order: ArgoCD self-heal and the `notiflex-api`
+PDB (`minAvailable: 1`) can otherwise block node draining. Leaving the CronJob running would keep
+firing failing jobs at an API that is no longer there.
 
 ```bash
-kubectl --context notiflex-gke patch application notiflex-smb -n argocd --type merge \
-  -p '{"spec":{"syncPolicy":{"automated":null}}}'
+# root first, then the children
+for app in root-app notiflex-smb notiflex-enterprise notiflex-monitoring notiflex-kafka; do
+  kubectl --context notiflex-gke patch application "$app" -n argocd --type merge \
+    -p '{"spec":{"syncPolicy":{"automated":null}}}'
+done
+
+kubectl --context notiflex-gke patch cronjob notiflex-healthcheck -n notiflex \
+  -p '{"spec":{"suspend":true}}'
 
 kubectl --context notiflex-gke scale rollout.argoproj.io/notiflex-api -n notiflex --replicas=0
+kubectl --context notiflex-gke scale rollout.argoproj.io/notiflex-api -n enterprise --replicas=0
 
-gcloud container clusters resize notiflex-cluster --node-pool default-pool \
-  --num-nodes 0 --zone asia-northeast3-a \
-  --project project-b3c5c78c-8a5c-4e47-9fe --quiet
+for pool in api-pool worker-pool ops-pool default-pool; do
+  gcloud container clusters resize notiflex-cluster --node-pool "$pool" --num-nodes 0 \
+    --zone asia-northeast3-a --project project-b3c5c78c-8a5c-4e47-9fe --quiet
+done
 ```
+
+Pausing does not touch the PVCs. Kafka's 5Gi, Loki's 2Gi, and Valkey's 1Gi survive, so the counter,
+the logs, and any unread messages are still there on resume. That is a few cents a month and the
+reason a paused cluster is not a free one.
 
 ## Development, Build, and Delivery
 
