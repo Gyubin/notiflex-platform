@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: notiflex-enterprise
+  namespace: argocd
+  annotations:
+    # 0: 인프라, 1: 플랫폼, 2: 애플리케이션
+    argocd.argoproj.io/sync-wave: "2"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Gyubin/notiflex-platform.git
+    targetRevision: main
+    path: k8s/enterprise
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: enterprise
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # enterprise 네임스페이스를 별도 매니페스트로 두지 않고 sync 시점에 만들게 위임한다.
+      - CreateNamespace=true

@@ -1,0 +1,86 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: notiflex-api
+  namespace: enterprise
+spec:
+  # api-pool 노드 1대를 smb 테넌트와 나눠 쓰는 중이라 단일 replica 로 시작한다.
+  # ch8 에서 워크로드가 늘면 노드 용량과 함께 다시 본다.
+  replicas: 1
+  revisionHistoryLimit: 2
+  selector:
+    matchLabels:
+      app: notiflex-api
+  template:
+    metadata:
+      labels:
+        app: notiflex-api
+    spec:
+      # smb 테넌트와 동일한 GKE 자동 라벨을 쓴다. 커스텀 키를 쓰면 Pod 이 영구 Pending 이 된다.
+      nodeSelector:
+        cloud.google.com/gke-nodepool: api-pool
+      serviceAccountName: notiflex-api
+      containers:
+        - name: notiflex-api
+          image: asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform/notiflex-api:v0.2.3
+          ports:
+            - containerPort: 8080
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            # Valkey 는 notiflex 네임스페이스에 있으므로 FQDN 으로 지정해야 한다.
+            # 생략하면 localhost:6379 로 붙으려다 CrashLoopBackOff 로 빠진다.
+            - name: VALKEY_ADDR
+              value: valkey-primary.notiflex.svc.cluster.local:6379
+            - name: VALKEY_PASSWORD_FILE
+              value: /mnt/secrets/valkey-password
+          volumeMounts:
+            - name: secrets-store
+              mountPath: /mnt/secrets
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+      volumes:
+        - name: secrets-store
+          csi:
+            driver: secrets-store-gke.csi.k8s.io
+            readOnly: true
+            volumeAttributes:
+              secretProviderClass: notiflex-secrets
+  strategy:
+    # smb 와 달리 stable/canary Service 를 두지 않는다.
+    # 단일 Service 뒤에서 replica 비율로만 단계 진행하는 최소 구성이다.
+    canary:
+      steps:
+        - setWeight: 50
+        - pause:
+            duration: 30s
