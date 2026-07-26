@@ -80,3 +80,27 @@
 - 각 단계에 30초 관찰 구간을 두고 문제 발생 시 안정 버전으로 중단할 수 있다.
 - 기존 Rollout CRD와 stable/preview Service를 재사용하므로 별도 배포 도구가 필요 없다.
 - Blue/Green의 상시 이중 환경보다 점진적으로 리소스를 늘리는 확장 경로를 제공한다.
+
+## ADR-011: 워크로드 배치는 nodeSelector와 역할별 노드풀 (7장)
+**시점**: 2026-07 / **결정**: 역할별 Spot 노드풀(api-pool, worker-pool, ops-pool)을 만들고 `cloud.google.com/gke-nodepool` 라벨을 nodeSelector로 지정한다. taint/toleration, nodeAffinity, topologySpreadConstraints 기반 배치는 사용하지 않는다.
+**이유**:
+- GKE가 노드풀 이름을 라벨로 자동 부여하므로 매니페스트에 nodeSelector 한 줄만 추가하면 된다.
+- 단일 존 클러스터에서는 taint/affinity의 표현력이 필요하지 않고 설정 실수 위험만 늘어난다.
+- API 워크로드를 전용 노드로 옮겨 ch6에서 발생한 CPU 예약 포화를 해소한다.
+- nodeSelector는 배치만 지시하고 다른 Pod의 진입을 막지 못한다는 한계는 감수한다.
+
+## ADR-012: 다수 Application 관리는 App of Apps (7장)
+**시점**: 2026-07 / **결정**: `argocd/root-app.yaml`이 `argocd/apps/`를 재귀 감시하는 App of Apps 구조를 사용한다. ApplicationSet과 Application 수동 관리는 사용하지 않는다.
+**이유**:
+- 디렉터리에 YAML을 추가하면 앱이 등록되는 흐름이라 템플릿 문법 없이 순수 YAML만 쓴다.
+- 관리 대상이 5~7개 수준이므로 ApplicationSet의 대량 생성 이점이 크지 않다.
+- sync-wave로 플랫폼(1)과 애플리케이션(2)의 설치 순서를 선언적으로 고정한다.
+- 이 전환에서 `k8s/monitoring/`을 수동 `kubectl apply` 대상에서 ArgoCD 관리로 편입한다.
+
+## ADR-013: 테넌트 격리는 Namespace 분리와 테넌트별 Rollout (7장)
+**시점**: 2026-07 / **결정**: 테넌트를 Namespace로 분리하고 테넌트마다 독립된 Rollout, Service, ServiceAccount, SecretProviderClass를 둔다. 단일 namespace 라벨 격리와 vCluster는 사용하지 않는다.
+**이유**:
+- Namespace 경계로 RBAC, 리소스 쿼터, 네트워크 정책을 테넌트 단위로 적용할 수 있다.
+- App of Apps와 자연스럽게 결합되어 테넌트 추가가 Application YAML 한 개로 끝난다.
+- 테넌트별로 배포 시점과 버전을 독립적으로 가져갈 수 있다.
+- 격리 대상은 컴퓨트이며 Valkey는 여전히 공유한다. 데이터 격리는 이후 과제로 남긴다.

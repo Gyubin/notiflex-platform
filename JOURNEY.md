@@ -70,7 +70,7 @@
 | Python | 3.13 | 2026-07-12 로컬 uv 전환하며 이미지(python:3.13-slim)에 맞춰 3.14→3.13 정합 |
 | FastAPI | 0.139.0 | |
 | uvicorn | 0.50.0 | |
-| Notiflex 이미지 | v0.2.3 | 2026-07-20 v0.2.3: Canary 실배포 검증용 불변 태그. 20%→50%→80% 각 30초 pause 후 자동 승격, Gateway `/version`과 `/id` 정상 확인 |
+| Notiflex 이미지 | v0.2.3 | 2026-07-20 v0.2.3: Canary 실배포 검증용 불변 태그. 20%→50%→80% 각 30초 pause 후 자동 승격, Gateway `/version`과 `/id` 정상 확인. 2026-07-27 ch7.4의 enterprise 테넌트도 같은 태그를 사용 |
 | ArgoCD | v3.4.5 | 2026-07-12 설치 (stable manifest) |
 | Argo Rollouts | v1.9.1 | 2026-07-20 Blue/Green에서 Canary로 전환. stable Service `notiflex-api`, canary Service `notiflex-api-preview`, setWeight 20/50/80과 각 30초 pause |
 | kube-prometheus-stack | 87.15.1 (Helm) | 2026-07-12 설치. Prometheus v3.13.1, Grafana 13.1.0, operator v0.92.1 |
