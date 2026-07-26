@@ -30,7 +30,7 @@
 | ch7 | 7.3 App of Apps | ✅ | 2026-07-27 | `argocd/root-app.yaml`이 `argocd/apps/`를 감시(`directory.recurse`)하는 App of Apps 구성. 기존 `notiflex-smb`를 `argocd/apps/`로 이동하고, 수동 `kubectl apply`로 관리하던 `k8s/monitoring/`을 `notiflex-monitoring` Application으로 편입. sync-wave 1(플랫폼)→2(앱) |
 | ch7 | 7.4 멀티테넌시 | ✅ | 2026-07-27 | `enterprise` 네임스페이스에 별도 Rollout/Service/SA 배포. `argocd/apps/notiflex-enterprise.yaml`을 root-app이 자동 감지해 Application 생성(`CreateNamespace=true`). 교재의 커밋된 Valkey Secret 대신 테넌트 전용 SecretProviderClass로 Secret Manager를 마운트하고, `/id`가 notiflex의 Valkey에 크로스 네임스페이스로 붙는 것까지 검증 |
 | ch7 | 💡 settings.local.json 권한 분리 | ✅ | 2026-07-27 | `.claude/settings.local.json`으로 deny/ask 체험. 교재 규칙 `Bash(kubectl delete *)`가 이 저장소에서는 매칭되지 않아 삭제가 실제로 실행됨(ArgoCD selfHeal로 복구). 실제 명령 형태에 맞춘 규칙으로 차단 확인 후 파일 삭제해 원상 복구. `ask` 시연은 worker-pool 실삭제 위험이 있어 생략 |
-| ch8 | 8.1 메시징 | ⬜ | | |
+| ch8 | 8.1 메시징 | ✅ | 2026-07-27 | Strimzi 1.1.0 operator + Kafka 4.3.0 단일 브로커(KRaft, controller/broker 겸용)를 worker-pool에 배치. `notifications` 토픽(3파티션). FastAPI에 aiokafka Producer/Consumer 추가해 `/id`가 Valkey INCR 후 이벤트를 발행하고, 같은 Pod의 백그라운드 Consumer가 수신. v0.3.0 배포 후 앱 로그 누락을 발견해 v0.3.1로 수정. `argocd/apps/notiflex-kafka.yaml`을 root-app이 자동 감지 |
 | ch8 | 8.2 트레이싱 | ⬜ | | |
 | ch8 | 8.3 CronJob | ⬜ | | |
 | ch9 | 9.1 저장소 분석 | ⬜ | | |
@@ -61,6 +61,8 @@
 | 노드 배치 (ch7.2) | nodeSelector + 역할별 노드풀 | taint/toleration, nodeAffinity, topologySpreadConstraints | GKE가 노드풀 이름을 `cloud.google.com/gke-nodepool` 라벨로 자동 부여하므로 매니페스트에 한 줄만 추가하면 된다. 단일 존 학습 클러스터에서 taint/affinity는 과도하다. 대신 nodeSelector는 다른 Pod의 진입을 막지 못한다는 한계를 감수한다 |
 | 다수 앱 관리 (ch7.3) | App of Apps (root-app) | ApplicationSet, Application 수동 관리 | `argocd/apps/`에 YAML을 넣으면 앱이 생긴다는 개념이 직관적이고 순수 YAML만 쓴다. 관리 대상이 5~7개 수준이라 ApplicationSet의 템플릿 이점이 크지 않다 |
 | 멀티테넌시 (ch7.4) | Namespace 분리 + per-tenant Rollout | 단일 namespace + 라벨 격리, vCluster | 강한 격리, ArgoCD App of Apps와 자연 결합, 테넌트별 독립 배포 |
+| 메시징 (ch8.1) | Kafka (Strimzi Operator) | RabbitMQ, NATS, Valkey Streams | 이벤트 드리븐의 사실상 표준이라 학습 가치가 가장 크고, Strimzi가 Kafka 클러스터·토픽을 CRD로 노출해 ArgoCD로 그대로 관리된다. KRaft 모드라 ZooKeeper 없이 단일 브로커로 e2-standard-2 한 대에 들어간다. 이미 깔린 Valkey의 Streams를 쓰면 추가 설치가 없지만 전용 브로커 대비 기능이 얕다 |
+| Kafka 클라이언트 (ch8.1) | aiokafka | confluent-kafka(librdkafka), kafka-python | FastAPI가 asyncio 기반이라 Consumer를 lifespan 안의 백그라운드 태스크로 자연스럽게 띄울 수 있다. confluent-kafka가 더 빠르지만 동기 API라 별도 스레드 관리가 필요하고, kafka-python은 유지보수가 정체됐다. 교재의 Go(sarama)를 대체 |
 | 시크릿 관리 (ch6.2) | GKE Secret Manager CSI + Workload Identity | K8s Secret, Sealed Secrets, External Secrets Operator | GKE 네이티브 Workload Identity로 키 파일 없이 Secret Manager를 읽고, CSI 파일 마운트로 앱 환경변수·Git에 비밀번호를 복제하지 않는다 |
 
 ## 현재 버전
@@ -70,7 +72,7 @@
 | Python | 3.13 | 2026-07-12 로컬 uv 전환하며 이미지(python:3.13-slim)에 맞춰 3.14→3.13 정합 |
 | FastAPI | 0.139.0 | |
 | uvicorn | 0.50.0 | |
-| Notiflex 이미지 | v0.2.3 | 2026-07-20 v0.2.3: Canary 실배포 검증용 불변 태그. 20%→50%→80% 각 30초 pause 후 자동 승격, Gateway `/version`과 `/id` 정상 확인. 2026-07-27 ch7.4의 enterprise 테넌트도 같은 태그를 사용 |
+| Notiflex 이미지 | v0.3.1 | 2026-07-20 v0.2.3: Canary 실배포 검증용 불변 태그. 2026-07-27 v0.3.0: aiokafka Producer/Consumer 추가, `/id` 응답에 `tenant`·`published` 필드와 `/notifications` 엔드포인트 신설. 2026-07-27 v0.3.1: `logging.basicConfig` 누락으로 앱 자체 로그가 전부 유실되던 문제 수정 |
 | ArgoCD | v3.4.5 | 2026-07-12 설치 (stable manifest) |
 | Argo Rollouts | v1.9.1 | 2026-07-20 Blue/Green에서 Canary로 전환. stable Service `notiflex-api`, canary Service `notiflex-api-preview`, setWeight 20/50/80과 각 30초 pause |
 | kube-prometheus-stack | 87.15.1 (Helm) | 2026-07-12 설치. Prometheus v3.13.1, Grafana 13.1.0, operator v0.92.1 |
@@ -78,7 +80,8 @@
 | Fluent Bit | grafana/fluent-bit (plugin-loki 2.1.0) | 2026-07-12 설치. DaemonSet, deprecated 차트지만 정상 동작 |
 | Valkey | 9.1.0 (Bitnami chart 6.2.0) | 2026-07-20 설치. standalone, 비밀번호 인증, 1Gi PVC. Helm이 `valkey` Secret의 `valkey-password`를 생성 |
 | Secret Manager CSI | GKE 관리형 addon | 2026-07-20 활성화. `secrets-store-gke.csi.k8s.io` Driver + provider `gke`, Workload Identity pool `project-b3c5c78c-8a5c-4e47-9fe.svc.id.goog` |
-| Kafka | (미설치) | |
+| Kafka | 4.3.0 (Strimzi 1.1.0) | 2026-07-27 설치. KRaft 모드, `dual-role` KafkaNodePool 1개가 controller+broker 겸용, 5Gi PVC. Strimzi 1.1.0은 Kafka 4.2.0~4.3.0만 지원 |
+| aiokafka | 0.13.0 | 2026-07-27 추가. Producer는 `/id`에서 send_and_wait, Consumer는 lifespan 백그라운드 태스크 |
 | OTel SDK | (미설치) | |
 
 ## 현재 리소스
@@ -87,7 +90,7 @@
 |--------|----------|---------|-------------|
 | default-pool | e2-medium (Spot), pd-balanced 30GB | 2 | 관측 스택(Prometheus/Grafana/Loki/Fluent Bit), ArgoCD, Argo Rollouts, kube-system |
 | api-pool (ch7.2) | e2-medium (Spot), pd-standard 50GB | 1 | notiflex 테넌트 Rollout ×2 + enterprise 테넌트 Rollout ×1 (모두 nodeSelector). 여유 용량 때문에 valkey-primary도 현재 이 노드에 배치됨 |
-| worker-pool (ch7.2) | e2-standard-2 (Spot), pd-standard 50GB | 1 | ch8 Kafka 배치 예정 |
+| worker-pool (ch7.2) | e2-standard-2 (Spot), pd-standard 50GB | 1 | Strimzi operator, Kafka 브로커(dual-role), entity-operator (ch8.1). CPU 10% / 메모리 44% 사용 |
 | ops-pool (ch7.2) | e2-small (Spot), pd-standard 50GB | 1 | ch8 CronJob 배치 예정 |
 
 모든 노드풀에 `--workload-metadata=GKE_METADATA`를 지정해 ch6.2의 Workload Identity(Secret Manager 접근)가 새 노드에서도 동작한다. 신규 풀은 `pd-standard`(HDD) 50GB로 만들어 리전 SSD 쿼터(300GB)를 소비하지 않는다.
@@ -125,3 +128,10 @@
 | ch6 | Workload Identity 노드 교체가 단일 API replica의 PDB(`minAvailable: 1`) 때문에 드레인에서 정체 | GitOps PDB를 `minAvailable: 0`으로 임시 완화해 새 노드로 재배치. ch7에서 replicas와 함께 `minAvailable: 1` 복원 필요 |
 | ch6 | CSI DaemonSet 추가 뒤 2개 e2-medium 노드의 CPU 예약이 96% 이상으로 포화되어 API·Valkey가 Pending | Loki·Fluent Bit만 중지해도 50m Pod를 수용할 여유가 부족해 default-pool을 Spot 노드 3개로 임시 확장. ch7 역할별 노드풀 설계에서 재평가 |
 | ch6 | CSI Rollout이 이전 이미지(v0.2.1)를 그대로 사용해 `VALKEY_PASSWORD` 누락으로 CrashLoop | 코드 변경 후 새 불변 태그 `v0.2.2`를 릴리스해 `VALKEY_PASSWORD_FILE` 지원 이미지를 배포 |
+| ch8 | 교재가 지정한 Kafka 4.1.0이 Strimzi 1.1.0에서 기동 실패 | Strimzi 1.1.0이 지원하는 Kafka는 4.2.0·4.2.1·4.3.0뿐이다. `helm template ... \| grep STRIMZI_KAFKA_IMAGES`로 실제 지원 목록을 먼저 확인하고 4.3.0을 지정. Strimzi 버전이 오를 때마다 다시 봐야 하는 값 |
+| ch8 | Strimzi PodTemplate에 `nodeSelector` 필드가 없어 worker-pool 고정 방법이 없음 | Strimzi는 `spec.template.pod`에 `affinity`와 `tolerations`만 노출한다. 라벨 키는 다른 매니페스트와 같은 `cloud.google.com/gke-nodepool`을 쓰되 nodeAffinity(`requiredDuringScheduling...`)로 동일한 배치를 만든다 |
+| ch8 | 앱이 남기는 `logger.info`가 Pod 로그에 전혀 안 나옴 | uvicorn은 자기 로거만 설정하고 root 로거는 핸들러 없이 둔다. 그래서 INFO 로그가 logging의 last-resort 핸들러(WARNING 이상만 통과)로 떨어져 사라졌다. ch6의 "Valkey 연결 성공"도 그동안 안 보이던 상태. `logging.basicConfig(level=INFO)` 추가(v0.3.1)로 해결 |
+| ch8 | CI가 `k8s/smb/rollout.yaml`만 갱신해 enterprise 테넌트가 옛 이미지에 방치됨 | ch7.4에서 테넌트를 추가할 때 CI를 같이 손보지 않아 생긴 빈틈. 두 테넌트가 같은 이미지를 쓰므로 CI의 sed 대상을 두 매니페스트로 확장. 테넌트별로 버전을 다르게 가려면 여기서 다시 갈라야 한다 |
+| ch8 | 단일 `notifications` 토픽에서 enterprise Consumer가 smb 메시지까지 전부 수신 (`consumed: 6` = enterprise 2 + smb 4) | Consumer Group을 테넌트별로 나누면 "각자 토픽 전량을 독립적으로 읽는" 것이지 격리가 아니다. 메시지 키에 테넌트를 실어도 파티션 배분이 갈릴 뿐 구독 범위는 그대로다. 진짜 격리는 테넌트별 토픽이나 Kafka ACL이 필요하며, ch7.4의 Valkey `/id` 공유 문제와 같은 성격의 미해결 과제로 ch9에서 함께 다룬다 |
+| ch8 | 한 테넌트의 메시지가 Pod 하나에만 몰림 (`consumed: 4` vs `0`) | 메시지 키를 테넌트 이름으로 고정하면 그 테넌트의 메시지가 항상 같은 파티션으로 간다. 파티션 하나는 그룹 내 Consumer 하나만 받으므로 replica를 늘려도 테넌트 내 병렬 처리가 늘지 않는다. 순서 보장과 처리량을 맞바꾼 구조이며, 병렬이 필요하면 키를 알림 ID 등으로 바꿔야 한다 |
+| ch8 | 릴리스 태그 push 후 문서 커밋이 non-fast-forward로 거절 (ch5와 동일 재발) | CI가 `ci: deploy ...` 커밋을 main에 먼저 올린다. `git rebase --autostash origin/main`으로 재배치. 태그를 밀기 전에 `git fetch`부터 하는 습관이 필요 |
