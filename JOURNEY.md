@@ -32,7 +32,7 @@
 | ch7 | 💡 settings.local.json 권한 분리 | ✅ | 2026-07-27 | `.claude/settings.local.json`으로 deny/ask 체험. 교재 규칙 `Bash(kubectl delete *)`가 이 저장소에서는 매칭되지 않아 삭제가 실제로 실행됨(ArgoCD selfHeal로 복구). 실제 명령 형태에 맞춘 규칙으로 차단 확인 후 파일 삭제해 원상 복구. `ask` 시연은 worker-pool 실삭제 위험이 있어 생략 |
 | ch8 | 8.1 메시징 | ✅ | 2026-07-27 | Strimzi 1.1.0 operator + Kafka 4.3.0 단일 브로커(KRaft, controller/broker 겸용)를 worker-pool에 배치. `notifications` 토픽(3파티션). FastAPI에 aiokafka Producer/Consumer 추가해 `/id`가 Valkey INCR 후 이벤트를 발행하고, 같은 Pod의 백그라운드 Consumer가 수신. v0.3.0 배포 후 앱 로그 누락을 발견해 v0.3.1로 수정. `argocd/apps/notiflex-kafka.yaml`을 root-app이 자동 감지 |
 | ch8 | 8.2 트레이싱 | ✅ | 2026-07-27 | Grafana Tempo 2.9.0(SingleBinary)을 ops-pool에 설치하고 OTLP gRPC(4317) 수집. OTel Python SDK 1.39.0 + FastAPI 자동 계측에 `valkey.incr`·`kafka.publish` 수동 span을 더해 v0.4.0 배포. `GET /id` 트레이스에서 전체 6.80ms 중 Valkey 0.80ms·Kafka 2.96ms로 구간이 갈리는 것을 확인. `service.namespace`에 테넌트를 실어 Grafana에서 smb/enterprise를 나눠 조회 |
-| ch8 | 8.3 CronJob | ⬜ | | |
+| ch8 | 8.3 CronJob | ✅ | 2026-07-27 | `notiflex-healthcheck` CronJob(`*/5 * * * *`)을 ops-pool에 배치. Service DNS로 `/health`를 호출해 200이 아니면 실패로 종료한다. `concurrencyPolicy: Forbid`로 앞 실행이 밀렸을 때 중복 실행을 막고, `k8s/smb/`에 두어 ArgoCD가 관리 |
 | ch9 | 9.1 저장소 분석 | ⬜ | | |
 | ch9 | 9.2 회고 | ⬜ | | |
 | ch9 | 9.3 온보딩 문서 | ⬜ | | |
@@ -64,6 +64,7 @@
 | 메시징 (ch8.1) | Kafka (Strimzi Operator) | RabbitMQ, NATS, Valkey Streams | 이벤트 드리븐의 사실상 표준이라 학습 가치가 가장 크고, Strimzi가 Kafka 클러스터·토픽을 CRD로 노출해 ArgoCD로 그대로 관리된다. KRaft 모드라 ZooKeeper 없이 단일 브로커로 e2-standard-2 한 대에 들어간다. 이미 깔린 Valkey의 Streams를 쓰면 추가 설치가 없지만 전용 브로커 대비 기능이 얕다 |
 | Kafka 클라이언트 (ch8.1) | aiokafka | confluent-kafka(librdkafka), kafka-python | FastAPI가 asyncio 기반이라 Consumer를 lifespan 안의 백그라운드 태스크로 자연스럽게 띄울 수 있다. confluent-kafka가 더 빠르지만 동기 API라 별도 스레드 관리가 필요하고, kafka-python은 유지보수가 정체됐다. 교재의 Go(sarama)를 대체 |
 | 분산 트레이싱 (ch8.2) | Grafana Tempo | Jaeger, Zipkin, Grafana Cloud Traces | 이미 Grafana를 쓰고 있어 메트릭·로그와 같은 화면에서 트레이스까지 본다. 인덱스 없이 오브젝트 스토리지에 그대로 쌓는 구조라 Jaeger의 Elasticsearch 백엔드보다 훨씬 가볍고, e2-small 노드에 22Mi로 들어간다. 대신 트레이스 ID 조회 위주라 복잡한 속성 검색은 Jaeger보다 약하다 |
+| 배치 자동화 (ch8.3) | K8s CronJob | 외부 cron + 클러스터 외부 트리거, Argo Workflows | 쿠버네티스 네이티브라 별도 설치가 없고, 매니페스트 한 장이라 ArgoCD가 그대로 관리한다(git blame·PR 리뷰도 그대로 붙는다). ops-pool에 배치해 API 노드를 건드리지 않는다. Argo Workflows는 의존성 있는 다단계 파이프라인용이라 헬스체크 한 건에는 과하다 |
 | 시크릿 관리 (ch6.2) | GKE Secret Manager CSI + Workload Identity | K8s Secret, Sealed Secrets, External Secrets Operator | GKE 네이티브 Workload Identity로 키 파일 없이 Secret Manager를 읽고, CSI 파일 마운트로 앱 환경변수·Git에 비밀번호를 복제하지 않는다 |
 
 ## 현재 버전
