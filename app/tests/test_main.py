@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi.testclient import TestClient
 from redis.exceptions import ConnectionError
@@ -5,6 +7,23 @@ from redis.exceptions import ConnectionError
 import main
 
 client = TestClient(main.app)
+
+
+class FakeProducer:
+    """send_and_wait 호출만 기록하는 Kafka Producer 대역."""
+
+    def __init__(self) -> None:
+        self.sent: list[tuple[str, dict, bytes]] = []
+
+    async def send_and_wait(self, topic, value, key):
+        self.sent.append((topic, json.loads(value.decode()), key))
+
+
+@pytest.fixture
+def kafka_producer(monkeypatch):
+    fake = FakeProducer()
+    monkeypatch.setattr(main, "_kafka_producer", fake)
+    return fake
 
 
 class FakeValkey:
@@ -61,6 +80,37 @@ def test_id_returns_pod_name_from_env(monkeypatch, valkey_client):
     monkeypatch.setenv("POD_NAME", "notiflex-abc123")
     response = client.get("/id")
     assert response.json()["pod"] == "notiflex-abc123"
+
+
+def test_id_publishes_event_to_kafka(valkey_client, kafka_producer):
+    body = client.get("/id").json()
+
+    assert body["published"] is True
+    assert len(kafka_producer.sent) == 1
+    topic, event, key = kafka_producer.sent[0]
+    assert topic == "notifications"
+    assert event["id"] == body["id"]
+    # 테넌트가 메시지 키로 실려야 같은 테넌트 메시지가 같은 파티션으로 간다.
+    assert event["tenant"] == main.TENANT
+    assert key == main.TENANT.encode()
+
+
+def test_id_works_without_kafka_broker(valkey_client):
+    # KAFKA_BROKER 미설정(=Producer None)이어도 ID 발급은 계속 동작해야 한다.
+    body = client.get("/id").json()
+    assert body["published"] is False
+    assert body["id"] >= 1
+
+
+def test_notifications_reports_consumed_state(monkeypatch):
+    monkeypatch.setattr(main, "_consumed_count", 2)
+    monkeypatch.setattr(main, "_last_consumed", {"id": 7, "tenant": "smb"})
+
+    body = client.get("/notifications").json()
+
+    assert body["consumed"] == 2
+    assert body["last"] == {"id": 7, "tenant": "smb"}
+    assert body["tenant"] == main.TENANT
 
 
 def test_metrics_endpoint_exposes_prometheus_format():

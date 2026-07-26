@@ -60,12 +60,16 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch origin main
           git checkout -B main origin/main
-          sed -i "s|image: .*notiflex-api:.*|image: ${IMAGE_URI}|" k8s/smb/rollout.yaml
-          grep "image:" k8s/smb/rollout.yaml
-          if git diff --quiet k8s/smb/rollout.yaml; then
+          # ch8.1: 두 테넌트가 같은 이미지를 쓰므로 enterprise 매니페스트도 함께 올린다.
+          # smb만 갱신하면 enterprise가 옛 이미지에 머문 채 조용히 뒤처진다.
+          # 테넌트별로 다른 버전을 배포하고 싶어지면 여기서 대상을 갈라야 한다.
+          MANIFESTS="k8s/smb/rollout.yaml k8s/enterprise/rollout.yaml"
+          sed -i "s|image: .*notiflex-api:.*|image: ${IMAGE_URI}|" ${MANIFESTS}
+          grep "image:" ${MANIFESTS}
+          if git diff --quiet ${MANIFESTS}; then
             echo "manifest already up to date, nothing to commit"
             exit 0
           fi
-          git add k8s/smb/rollout.yaml
+          git add ${MANIFESTS}
           git commit -m "ci: deploy notiflex-api ${GITHUB_REF_NAME}"
           git push origin main

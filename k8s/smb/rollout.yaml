@@ -34,6 +34,12 @@ spec:
               value: valkey-primary.notiflex.svc.cluster.local:6379
             - name: VALKEY_PASSWORD_FILE
               value: /mnt/secrets/valkey-password
+            # ch8.1: Kafka 는 kafka 네임스페이스에 있어 FQDN 으로 지정한다.
+            - name: KAFKA_BROKER
+              value: notiflex-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092
+            # 메시지 키와 Consumer Group 이름에 쓰인다. 테넌트마다 달라야 한다.
+            - name: TENANT
+              value: smb
           volumeMounts:
             - name: secrets-store
               mountPath: /mnt/secrets

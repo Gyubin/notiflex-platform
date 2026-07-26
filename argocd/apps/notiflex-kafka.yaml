@@ -1,0 +1,26 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: notiflex-kafka
+  namespace: argocd
+  annotations:
+    # 0: 인프라, 1: 플랫폼, 2: 애플리케이션
+    # Kafka 는 앱이 Producer 로 붙기 전에 떠 있어야 하므로 플랫폼 웨이브에 둔다.
+    argocd.argoproj.io/sync-wave: "1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/Gyubin/notiflex-platform.git
+    targetRevision: main
+    path: k8s/kafka
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kafka
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

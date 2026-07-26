@@ -1,0 +1,13 @@
+apiVersion: kafka.strimzi.io/v1
+kind: KafkaTopic
+metadata:
+  name: notifications
+  namespace: kafka
+  labels:
+    strimzi.io/cluster: notiflex-kafka
+spec:
+  # 파티션 3개는 Consumer 를 늘렸을 때 나눠 받는 모습을 보기 위한 최소 구성이다.
+  # 지금은 테넌트마다 Consumer 가 1개씩이라 한 Consumer 가 3개를 모두 읽는다.
+  partitions: 3
+  # 브로커가 1대라 복제본을 2개 이상 두면 토픽이 생성되지 않는다.
+  replicas: 1

@@ -36,6 +36,12 @@ spec:
               value: valkey-primary.notiflex.svc.cluster.local:6379
             - name: VALKEY_PASSWORD_FILE
               value: /mnt/secrets/valkey-password
+            # ch8.1: 브로커는 smb 와 같은 것을 쓰지만 Consumer Group 은 TENANT 로 갈린다.
+            # 그룹이 갈려야 두 테넌트가 토픽 전체를 각자 독립적으로 읽는다.
+            - name: KAFKA_BROKER
+              value: notiflex-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092
+            - name: TENANT
+              value: enterprise
           volumeMounts:
             - name: secrets-store
               mountPath: /mnt/secrets

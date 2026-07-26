@@ -1,0 +1,18 @@
+# Strimzi Kafka Operator (ch8.1)
+#
+# operator 를 worker-pool 에 고정한다. default-pool 은 관측 스택이 차지하고 있어
+# 여유가 적고, Kafka 브로커도 같은 풀에 두어야 브로커-오퍼레이터 통신이 노드를 넘지 않는다.
+# 노드풀에 taint 를 걸지 않았으므로 toleration 은 두지 않는다.
+nodeSelector:
+  cloud.google.com/gke-nodepool: worker-pool
+
+# 학습 클러스터라 operator 가 감시할 네임스페이스를 kafka 하나로 제한한다.
+watchAnyNamespace: false
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 500m
+    memory: 512Mi

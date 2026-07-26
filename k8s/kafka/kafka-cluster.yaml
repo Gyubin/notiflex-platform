@@ -1,0 +1,45 @@
+apiVersion: kafka.strimzi.io/v1
+kind: Kafka
+metadata:
+  name: notiflex-kafka
+  namespace: kafka
+spec:
+  kafka:
+    # Strimzi 1.1.0 이 지원하는 Kafka 는 4.2.0 / 4.2.1 / 4.3.0 뿐이다.
+    # 교재가 적어둔 4.1.0 을 넣으면 UnsupportedKafkaVersionException 으로 클러스터가 뜨지 않는다.
+    version: 4.3.0
+    # v1 API 에서는 replicas 와 resources 가 여기서 사라지고 KafkaNodePool 로 옮겨갔다.
+    listeners:
+      - name: plain
+        port: 9092
+        type: internal
+        tls: false
+    config:
+      # 브로커가 1대뿐이라 복제 계수와 ISR 을 모두 1 로 낮춘다. 기본값(3)이면 토픽 생성이 실패한다.
+      offsets.topic.replication.factor: 1
+      transaction.state.log.replication.factor: 1
+      transaction.state.log.min.isr: 1
+      default.replication.factor: 1
+      min.insync.replicas: 1
+  entityOperator:
+    # KafkaTopic 을 YAML 로 관리하기 위해 topic-operator 만 켠다.
+    # KafkaUser 를 쓰지 않는데 user-operator 를 켜두면 CrashLoopBackOff 로 빠진다.
+    topicOperator:
+      resources:
+        requests:
+          cpu: 20m
+          memory: 256Mi
+        limits:
+          cpu: 200m
+          memory: 512Mi
+    template:
+      pod:
+        affinity:
+          nodeAffinity:
+            requiredDuringSchedulingIgnoredDuringExecution:
+              nodeSelectorTerms:
+                - matchExpressions:
+                    - key: cloud.google.com/gke-nodepool
+                      operator: In
+                      values:
+                        - worker-pool
