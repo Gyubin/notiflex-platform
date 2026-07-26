@@ -31,7 +31,7 @@
 | ch7 | 7.4 멀티테넌시 | ✅ | 2026-07-27 | `enterprise` 네임스페이스에 별도 Rollout/Service/SA 배포. `argocd/apps/notiflex-enterprise.yaml`을 root-app이 자동 감지해 Application 생성(`CreateNamespace=true`). 교재의 커밋된 Valkey Secret 대신 테넌트 전용 SecretProviderClass로 Secret Manager를 마운트하고, `/id`가 notiflex의 Valkey에 크로스 네임스페이스로 붙는 것까지 검증 |
 | ch7 | 💡 settings.local.json 권한 분리 | ✅ | 2026-07-27 | `.claude/settings.local.json`으로 deny/ask 체험. 교재 규칙 `Bash(kubectl delete *)`가 이 저장소에서는 매칭되지 않아 삭제가 실제로 실행됨(ArgoCD selfHeal로 복구). 실제 명령 형태에 맞춘 규칙으로 차단 확인 후 파일 삭제해 원상 복구. `ask` 시연은 worker-pool 실삭제 위험이 있어 생략 |
 | ch8 | 8.1 메시징 | ✅ | 2026-07-27 | Strimzi 1.1.0 operator + Kafka 4.3.0 단일 브로커(KRaft, controller/broker 겸용)를 worker-pool에 배치. `notifications` 토픽(3파티션). FastAPI에 aiokafka Producer/Consumer 추가해 `/id`가 Valkey INCR 후 이벤트를 발행하고, 같은 Pod의 백그라운드 Consumer가 수신. v0.3.0 배포 후 앱 로그 누락을 발견해 v0.3.1로 수정. `argocd/apps/notiflex-kafka.yaml`을 root-app이 자동 감지 |
-| ch8 | 8.2 트레이싱 | ⬜ | | |
+| ch8 | 8.2 트레이싱 | ✅ | 2026-07-27 | Grafana Tempo 2.9.0(SingleBinary)을 ops-pool에 설치하고 OTLP gRPC(4317) 수집. OTel Python SDK 1.39.0 + FastAPI 자동 계측에 `valkey.incr`·`kafka.publish` 수동 span을 더해 v0.4.0 배포. `GET /id` 트레이스에서 전체 6.80ms 중 Valkey 0.80ms·Kafka 2.96ms로 구간이 갈리는 것을 확인. `service.namespace`에 테넌트를 실어 Grafana에서 smb/enterprise를 나눠 조회 |
 | ch8 | 8.3 CronJob | ⬜ | | |
 | ch9 | 9.1 저장소 분석 | ⬜ | | |
 | ch9 | 9.2 회고 | ⬜ | | |
@@ -63,6 +63,7 @@
 | 멀티테넌시 (ch7.4) | Namespace 분리 + per-tenant Rollout | 단일 namespace + 라벨 격리, vCluster | 강한 격리, ArgoCD App of Apps와 자연 결합, 테넌트별 독립 배포 |
 | 메시징 (ch8.1) | Kafka (Strimzi Operator) | RabbitMQ, NATS, Valkey Streams | 이벤트 드리븐의 사실상 표준이라 학습 가치가 가장 크고, Strimzi가 Kafka 클러스터·토픽을 CRD로 노출해 ArgoCD로 그대로 관리된다. KRaft 모드라 ZooKeeper 없이 단일 브로커로 e2-standard-2 한 대에 들어간다. 이미 깔린 Valkey의 Streams를 쓰면 추가 설치가 없지만 전용 브로커 대비 기능이 얕다 |
 | Kafka 클라이언트 (ch8.1) | aiokafka | confluent-kafka(librdkafka), kafka-python | FastAPI가 asyncio 기반이라 Consumer를 lifespan 안의 백그라운드 태스크로 자연스럽게 띄울 수 있다. confluent-kafka가 더 빠르지만 동기 API라 별도 스레드 관리가 필요하고, kafka-python은 유지보수가 정체됐다. 교재의 Go(sarama)를 대체 |
+| 분산 트레이싱 (ch8.2) | Grafana Tempo | Jaeger, Zipkin, Grafana Cloud Traces | 이미 Grafana를 쓰고 있어 메트릭·로그와 같은 화면에서 트레이스까지 본다. 인덱스 없이 오브젝트 스토리지에 그대로 쌓는 구조라 Jaeger의 Elasticsearch 백엔드보다 훨씬 가볍고, e2-small 노드에 22Mi로 들어간다. 대신 트레이스 ID 조회 위주라 복잡한 속성 검색은 Jaeger보다 약하다 |
 | 시크릿 관리 (ch6.2) | GKE Secret Manager CSI + Workload Identity | K8s Secret, Sealed Secrets, External Secrets Operator | GKE 네이티브 Workload Identity로 키 파일 없이 Secret Manager를 읽고, CSI 파일 마운트로 앱 환경변수·Git에 비밀번호를 복제하지 않는다 |
 
 ## 현재 버전
@@ -82,7 +83,8 @@
 | Secret Manager CSI | GKE 관리형 addon | 2026-07-20 활성화. `secrets-store-gke.csi.k8s.io` Driver + provider `gke`, Workload Identity pool `project-b3c5c78c-8a5c-4e47-9fe.svc.id.goog` |
 | Kafka | 4.3.0 (Strimzi 1.1.0) | 2026-07-27 설치. KRaft 모드, `dual-role` KafkaNodePool 1개가 controller+broker 겸용, 5Gi PVC. Strimzi 1.1.0은 Kafka 4.2.0~4.3.0만 지원 |
 | aiokafka | 0.13.0 | 2026-07-27 추가. Producer는 `/id`에서 send_and_wait, Consumer는 lifespan 백그라운드 태스크 |
-| OTel SDK | (미설치) | |
+| Tempo | 2.9.0 (grafana/tempo chart 1.24.4) | 2026-07-27 설치. SingleBinary, OTLP gRPC 4317 수집 / HTTP 3200 조회, emptyDir 저장, retention 24h. deprecated 차트지만 단일 바이너리 모드로 충분 |
+| OTel SDK | opentelemetry-sdk 1.39.0 | 2026-07-27 추가. `opentelemetry-exporter-otlp-proto-grpc` 1.39.0, `opentelemetry-instrumentation-fastapi` 0.60b0 |
 
 ## 현재 리소스
 
@@ -91,7 +93,7 @@
 | default-pool | e2-medium (Spot), pd-balanced 30GB | 2 | 관측 스택(Prometheus/Grafana/Loki/Fluent Bit), ArgoCD, Argo Rollouts, kube-system |
 | api-pool (ch7.2) | e2-medium (Spot), pd-standard 50GB | 1 | notiflex 테넌트 Rollout ×2 + enterprise 테넌트 Rollout ×1 (모두 nodeSelector). 여유 용량 때문에 valkey-primary도 현재 이 노드에 배치됨 |
 | worker-pool (ch7.2) | e2-standard-2 (Spot), pd-standard 50GB | 1 | Strimzi operator, Kafka 브로커(dual-role), entity-operator (ch8.1). CPU 10% / 메모리 44% 사용 |
-| ops-pool (ch7.2) | e2-small (Spot), pd-standard 50GB | 1 | ch8 CronJob 배치 예정 |
+| ops-pool (ch7.2) | e2-small (Spot), pd-standard 50GB | 1 | Tempo (ch8.2), 헬스체크 CronJob (ch8.3). allocatable이 940m/1391Mi뿐이라 DaemonSet만으로 이미 CPU 56%·메모리 75%가 예약된 상태. 여기에 워크로드를 더 얹을 때는 반드시 requests를 먼저 확인한다 |
 
 모든 노드풀에 `--workload-metadata=GKE_METADATA`를 지정해 ch6.2의 Workload Identity(Secret Manager 접근)가 새 노드에서도 동작한다. 신규 풀은 `pd-standard`(HDD) 50GB로 만들어 리전 SSD 쿼터(300GB)를 소비하지 않는다.
 
@@ -134,4 +136,7 @@
 | ch8 | CI가 `k8s/smb/rollout.yaml`만 갱신해 enterprise 테넌트가 옛 이미지에 방치됨 | ch7.4에서 테넌트를 추가할 때 CI를 같이 손보지 않아 생긴 빈틈. 두 테넌트가 같은 이미지를 쓰므로 CI의 sed 대상을 두 매니페스트로 확장. 테넌트별로 버전을 다르게 가려면 여기서 다시 갈라야 한다 |
 | ch8 | 단일 `notifications` 토픽에서 enterprise Consumer가 smb 메시지까지 전부 수신 (`consumed: 6` = enterprise 2 + smb 4) | Consumer Group을 테넌트별로 나누면 "각자 토픽 전량을 독립적으로 읽는" 것이지 격리가 아니다. 메시지 키에 테넌트를 실어도 파티션 배분이 갈릴 뿐 구독 범위는 그대로다. 진짜 격리는 테넌트별 토픽이나 Kafka ACL이 필요하며, ch7.4의 Valkey `/id` 공유 문제와 같은 성격의 미해결 과제로 ch9에서 함께 다룬다 |
 | ch8 | 한 테넌트의 메시지가 Pod 하나에만 몰림 (`consumed: 4` vs `0`) | 메시지 키를 테넌트 이름으로 고정하면 그 테넌트의 메시지가 항상 같은 파티션으로 간다. 파티션 하나는 그룹 내 Consumer 하나만 받으므로 replica를 늘려도 테넌트 내 병렬 처리가 늘지 않는다. 순서 보장과 처리량을 맞바꾼 구조이며, 병렬이 필요하면 키를 알림 ID 등으로 바꿔야 한다 |
+| ch8 | Tempo 차트 기본값 `memBallastSizeMbs: 1024`가 e2-small(가용 1391Mi)에 과함 | 볼러스트는 GC를 늦춰 지연을 줄이는 장치라 학습 규모에서는 필요 없다. `0`으로 두고 requests 192Mi/limits 384Mi로 배치. 실사용량은 22Mi에 그쳤다 |
+| ch8 | Tempo values에서 `receivers.jaeger: null`로 미사용 수신기를 끄려다 차트 렌더링 실패 | `nil pointer evaluating interface {}.protocols`. Service 템플릿(`_ports.tpl`)이 값의 존재 여부를 확인하지 않고 jaeger 포트를 참조한다. deprecated 차트라 수정될 가능성이 낮아 기본 수신기를 그대로 두기로 결정 |
+| ch8 | Grafana 데이터소스 uid가 자동 생성되어 매번 바뀜 | 프로비저닝 YAML에 `uid`를 안 적으면 Grafana가 임의 값(`P214B5B846CF3925F`)을 만든다. 대시보드·링크가 uid로 데이터소스를 참조하므로 재생성 시 깨진다. `uid: tempo`로 고정 |
 | ch8 | 릴리스 태그 push 후 문서 커밋이 non-fast-forward로 거절 (ch5와 동일 재발) | CI가 `ci: deploy ...` 커밋을 main에 먼저 올린다. `git rebase --autostash origin/main`으로 재배치. 태그를 밀기 전에 `git fetch`부터 하는 습관이 필요 |
