@@ -12,6 +12,9 @@ data:
     datasources:
       - name: Tempo
         type: tempo
+        # uid를 비워두면 Grafana가 매번 임의 값을 만든다. 대시보드나 링크가 uid로
+        # 데이터소스를 가리키므로, 재생성될 때 깨지지 않도록 고정한다.
+        uid: tempo
         access: proxy
         # 조회는 HTTP API(3200)로 한다. 4317은 앱이 트레이스를 보내는 수집 포트라 서로 다르다.
         url: http://tempo.monitoring.svc.cluster.local:3200
