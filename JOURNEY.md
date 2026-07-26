@@ -26,7 +26,7 @@
 | ch6 | 6.1 캐시 | ✅ | 2026-07-20 | Bitnami Valkey 9.1.0 standalone(1Gi PVC) 설치. FastAPI `/id`를 Valkey `INCR`로 전환하고 v0.2.1 배포 후 Gateway에서 1→2→3 순차 증가 검증 |
 | ch6 | 6.2 시크릿 관리 | ✅ | 2026-07-20 | Workload Identity와 GKE 관리형 Secret Manager CSI Driver 구성. Valkey 비밀번호를 Secret Manager에 이관하고 v0.2.2에서 읽기 전용 파일 마운트(`/mnt/secrets/valkey-password`) 검증 |
 | ch6 | 6.3 Canary 전환 | ✅ | 2026-07-20 | Argo Rollouts Canary(20%→50%→80%→100%, 각 30초) 전환. v0.2.3 실배포 후 자동 진행·승격 검증 |
-| ch7 | 7.2 멀티 노드풀 | ⬜ | | |
+| ch7 | 7.2 멀티 노드풀 | ✅ | 2026-07-27 | 역할별 Spot 노드풀 api-pool(e2-medium)·worker-pool(e2-standard-2)·ops-pool(e2-small) 생성. Rollout에 `cloud.google.com/gke-nodepool: api-pool` nodeSelector 적용해 API Pod 2개가 api-pool에 배치됨을 확인. 전용 노드 확보로 replicas 1→2, PDB `minAvailable` 0→1 복원 |
 | ch7 | 7.3 App of Apps | ⬜ | | |
 | ch7 | 7.4 멀티테넌시 | ⬜ | | |
 | ch8 | 8.1 메시징 | ⬜ | | |
@@ -57,6 +57,7 @@
 | 무중단 배포 | Argo Rollouts Blue/Green | Deployment Rolling Update, Canary | preview 리비전을 active 트래픽과 분리해 검증한 뒤 30초 후 전환 가능. 2 replica 규모에서는 이중 Pod 비용이 감당 가능하고, Canary 자동 판정을 위한 메트릭 기준은 아직 미구축 |
 | 배포 전략 전환 (ch6.3) | Argo Rollouts Canary | Blue/Green 유지, Rolling Update | 같은 Rollout CRD와 stable/preview Service를 재사용하면서 20%→50%→80% 단계별 관찰 구간을 두어 새 버전 노출 위험을 줄인다. 별도 배포 도구는 추가하지 않는다 |
 | 캐시 (ch6.1) | Valkey standalone | Redis, Memcached, DragonflyDB | Redis 호환 `INCR`로 Pod 간 원자적 ID 생성을 보장하고 BSD 라이선스를 유지한다. 2노드 학습 환경에는 50m/64Mi 요청과 1Gi PVC의 단일 인스턴스가 적합 |
+| 노드 배치 (ch7.2) | nodeSelector + 역할별 노드풀 | taint/toleration, nodeAffinity, topologySpreadConstraints | GKE가 노드풀 이름을 `cloud.google.com/gke-nodepool` 라벨로 자동 부여하므로 매니페스트에 한 줄만 추가하면 된다. 단일 존 학습 클러스터에서 taint/affinity는 과도하다. 대신 nodeSelector는 다른 Pod의 진입을 막지 못한다는 한계를 감수한다 |
 | 시크릿 관리 (ch6.2) | GKE Secret Manager CSI + Workload Identity | K8s Secret, Sealed Secrets, External Secrets Operator | GKE 네이티브 Workload Identity로 키 파일 없이 Secret Manager를 읽고, CSI 파일 마운트로 앱 환경변수·Git에 비밀번호를 복제하지 않는다 |
 
 ## 현재 버전
@@ -81,9 +82,14 @@
 
 | 노드풀 | 머신 타입 | 노드 수 | 주요 워크로드 |
 |--------|----------|---------|-------------|
-| default-pool | e2-medium (Spot) | **0 (ch6.3 완료 후 일시정지)** | ch6.3 검증 중에는 3노드에서 notiflex-api Canary × stable/canary, Valkey, CSI DaemonSet, 관측 스택, ArgoCD, Argo Rollouts를 운영. 완료 후 auto-sync 비활성화 → Rollout 0 → 노드풀 0 순서로 중단 |
+| default-pool | e2-medium (Spot), pd-balanced 30GB | 2 | 관측 스택(Prometheus/Grafana/Loki/Fluent Bit), ArgoCD, Argo Rollouts, kube-system |
+| api-pool (ch7.2) | e2-medium (Spot), pd-standard 50GB | 1 | notiflex-api Rollout ×2 (nodeSelector). 여유 용량 때문에 valkey-primary도 현재 이 노드에 배치됨 |
+| worker-pool (ch7.2) | e2-standard-2 (Spot), pd-standard 50GB | 1 | ch8 Kafka 배치 예정 |
+| ops-pool (ch7.2) | e2-small (Spot), pd-standard 50GB | 1 | ch8 CronJob 배치 예정 |
 
-> **운영 주의**: 현재 `notiflex-smb` auto-sync 비활성화, Rollout replica 0, 노드 풀 0으로 일시정지 상태다. 다음 실클러스터 작업에서는 노드 풀을 재개하고 auto-sync를 다시 켠 뒤 hard refresh한다. CSI 추가 후 2노드는 CPU 예약이 포화됐으므로 ch7 용량 확장 전에는 3노드가 필요하다. 다시 중단할 때는 auto-sync 비활성화 → Rollout replica 0 → 노드 풀 0 순서를 지킨다 (AGENTS.md "Paused Cluster" 참조).
+모든 노드풀에 `--workload-metadata=GKE_METADATA`를 지정해 ch6.2의 Workload Identity(Secret Manager 접근)가 새 노드에서도 동작한다. 신규 풀은 `pd-standard`(HDD) 50GB로 만들어 리전 SSD 쿼터(300GB)를 소비하지 않는다.
+
+> **운영 주의**: 현재 5노드로 가동 중이며 `notiflex-smb` auto-sync가 켜져 있다. 중단할 때는 auto-sync 비활성화 → Rollout replica 0 → 노드 풀 0 순서를 지킨다 (AGENTS.md "Paused Cluster" 참조). 재개 시에는 노드 풀 복구 후 auto-sync 재활성화와 hard refresh가 필요하다. api-pool은 노드가 1개이므로 그 노드를 드레인해야 할 때는 `notiflex-api` PDB의 `minAvailable`을 임시로 0으로 낮춘다.
 
 ## 트러블슈팅 이력
 
@@ -106,7 +112,9 @@
 | ch4 | grafana/fluent-bit 기본 `servicePath:/api/prom/push`(구버전)라 Loki 3.x 미수신 우려, PSP는 k8s 1.25+ 제거 | `loki.servicePath:/loki/api/v1/push`, `loki.serviceName:loki`, `rbac.pspEnabled:false` |
 | ch4 | Fluent Bit DaemonSet도 클러스터 전체 워크로드라 auto 분류기 승인 대상 | node-exporter와 동일 성격, 로그 수집 목적상 필수 → 진행 |
 | ch5 | Regional external Gateway 생성 전 서울 리전에 proxy-only 서브넷이 없음 | `default` 네트워크에 `REGIONAL_MANAGED_PROXY` 용도의 `proxy-only-subnet`(`172.16.0.0/23`)을 생성한 뒤 Gateway가 외부 IP를 할당받음 |
-| ch5 | `kubectl argo rollouts` 플러그인 조회에서 컨텍스트를 생략해 기본 회사 AWS 컨텍스트의 OIDC 인증이 시도됨 | 세션 시작 시 기본 컨텍스트를 `notiflex-gke`로 확인·전환하고, 플러그인 명령은 `kubectl argo rollouts --context notiflex-gke ...` 형식으로 명시. 일반 `kubectl`도 계속 `--context notiflex-gke`를 사용 |
+| ch5 | `kubectl argo rollouts` 플러그인 조회에서 컨텍스트를 생략해 기본 회사 AWS 컨텍스트의 OIDC 인증이 시도됨 | 세션 시작 시 기본 컨텍스트를 `notiflex-gke`로 확인·전환하고, 플러그인 명령에도 `--context notiflex-gke`를 반드시 붙인다. 일반 `kubectl`도 계속 `--context notiflex-gke`를 사용 |
+| ch7 | `kubectl --context notiflex-gke argo rollouts status ...`가 `flags cannot be placed before plugin name`으로 실패 | kubectl 플러그인은 플래그를 플러그인 이름 뒤에만 받는다. `kubectl argo rollouts status notiflex-api -n notiflex --context notiflex-gke` 순서로 쓴다 (ch5 기록의 명령 형식을 이에 맞춰 정정) |
+| ch7 | nodeSelector를 api-pool로 지정한 뒤 `valkey-primary`도 같은 api-pool 노드에 배치됨 | nodeSelector는 "이 노드로 가라"만 지시하고 다른 Pod의 진입을 막지 못한다(거부하려면 taint/toleration 필요). 학습 범위에서는 그대로 두고, ch8에서 워크로드가 늘면 데이터·워커 계열 배치를 재검토한다 |
 | ch5 | v0.2.0 CI가 `rollout.yaml`을 main에 먼저 커밋해 문서 푸시가 non-fast-forward로 거절됨 | 원격의 CI 커밋 범위를 확인한 뒤 `git rebase --autostash origin/main`으로 사용자 작업을 보존하며 문서 커밋을 재배치. force push는 사용하지 않음 |
 | ch6 | Bitnami Valkey chart 6.2.0이 `bitnami/valkey:latest` 롤링 태그 경고를 표시 | 학습 환경에서는 chart 6.2.0을 고정해 사용. 운영 전환 시에는 이미지 digest 또는 지원되는 고정 이미지 태그로 검토 필요 |
 | ch6 | Workload Identity 노드 교체가 단일 API replica의 PDB(`minAvailable: 1`) 때문에 드레인에서 정체 | GitOps PDB를 `minAvailable: 0`으로 임시 완화해 새 노드로 재배치. ch7에서 replicas와 함께 `minAvailable: 1` 복원 필요 |

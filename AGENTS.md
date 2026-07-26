@@ -22,7 +22,7 @@ Keep textbook discussions and completion reports in Korean.
 - **Project name**: `gyubin-gitaiops-project`
 - **Region / zone**: `asia-northeast3` / `asia-northeast3-a`
 - **Artifact Registry**: `asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform`
-- **Cluster**: `notiflex-cluster`, default-pool e2-medium Spot nodes with 30 GB disks; currently scaled to zero, resume with 3 nodes until ch7 adds capacity
+- **Cluster**: `notiflex-cluster`, four Spot node pools — `default-pool` (e2-medium ×2, pd-balanced 30 GB) for the shared platform, `api-pool` (e2-medium ×1) for `notiflex-api`, `worker-pool` (e2-standard-2 ×1) for ch8 Kafka, and `ops-pool` (e2-small ×1) for ch8 CronJobs. Every pool sets `--workload-metadata=GKE_METADATA`; the ch7 pools use `pd-standard` 50 GB disks to stay off the regional SSD quota
 - **kubectl context**: `notiflex-gke`
 - **Application namespace**: `notiflex`
 - **Gateway API**: enabled on the standard channel
@@ -43,14 +43,15 @@ repository.
 
 ## Paused Cluster: Resume Only for Requested Work
 
-The default node pool is intentionally scaled to zero to save cost, and the `notiflex-smb`
-ArgoCD application's automated sync is disabled. Documentation-only work must not resume the
-cluster. Before a requested chapter needs a live cluster, explain the impact and perform the
-following recovery sequence:
+Between chapters the node pools are scaled to zero to save cost and the `notiflex-smb` ArgoCD
+application's automated sync is disabled. Documentation-only work must not resume the cluster.
+Before a requested chapter needs a live cluster, explain the impact and perform the following
+recovery sequence, repeating the resize for every pool the chapter needs (`default-pool` 2,
+`api-pool` 1, `worker-pool` 1, `ops-pool` 1):
 
 ```bash
 gcloud container clusters resize notiflex-cluster --node-pool default-pool \
-  --num-nodes 3 --zone asia-northeast3-a \
+  --num-nodes 2 --zone asia-northeast3-a \
   --project project-b3c5c78c-8a5c-4e47-9fe --quiet
 
 kubectl --context notiflex-gke patch application notiflex-smb -n argocd --type merge \
@@ -119,8 +120,13 @@ gcloud container clusters resize notiflex-cluster --node-pool default-pool \
 - The current strategy is Canary with stable Service `notiflex-api`, canary Service
   `notiflex-api-preview`, weights 20/50/80, and a 30-second pause after each weight.
 - Preserve `notiflex-api-preview`; deleting it makes the Rollout specification invalid.
-- With the current single desired replica, intermediate pod-based weights are coarse. Production
-  traffic percentages require more replicas or an integrated traffic router and metric analysis.
+- The Rollout runs two replicas on `api-pool` through the
+  `cloud.google.com/gke-nodepool: api-pool` nodeSelector. Use that label key in every manifest;
+  a custom key such as `role` or `workload` leaves pods permanently Pending.
+- With only two replicas, intermediate pod-based weights are still coarse. Production traffic
+  percentages require more replicas or an integrated traffic router and metric analysis.
+- The `notiflex-api` PodDisruptionBudget is back to `minAvailable: 1`. Because `api-pool` has a
+  single node, lower it temporarily when that node must be drained.
 
 ## Observability
 
@@ -137,8 +143,9 @@ gcloud container clusters resize notiflex-cluster --node-pool default-pool \
   ```
 
 - Prometheus, Grafana, Alertmanager, operator, and Loki CPU requests were reduced to 5m before the
-  ch6 CSI DaemonSet was enabled. Even after that reduction, two e2-medium nodes were CPU-saturated;
-  use three default-pool nodes until ch7 adds capacity and validate actual usage with `kubectl top`.
+  ch6 CSI DaemonSet was enabled. Two e2-medium nodes were CPU-saturated at that point; ch7.2 moved
+  `notiflex-api` onto its own `api-pool`, which freed default-pool for the platform components.
+  Validate actual usage with `kubectl top` before adding more workloads.
 
 ## Operating Rules
 
