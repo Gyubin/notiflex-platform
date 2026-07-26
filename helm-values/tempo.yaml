@@ -1,0 +1,52 @@
+# Tempo values — Notiflex (ch8.2, ops-pool e2-small 기준으로 최소화)
+# 가드레일: prompt-guardrails/ch8/8.2-tempo.md
+# SingleBinary 모드. Loki와 같은 방침으로 학습에 필요한 최소 구성만 켠다.
+
+# ops-pool 은 taint 가 없으므로 nodeSelector 만으로 충분하다.
+# 차트가 nodeSelector 를 그대로 노출해서 Strimzi 처럼 affinity 로 우회할 필요가 없다.
+nodeSelector:
+  cloud.google.com/gke-nodepool: ops-pool
+
+tempo:
+  # 기본값 1024(=1GB). e2-small(가용 메모리 1.4Gi)에서는 이것만으로 노드가 넘친다.
+  # 볼러스트는 GC 를 늦춰 지연을 줄이는 장치라 학습 규모에서는 필요 없다.
+  memBallastSizeMbs: 0
+
+  # Grafana Labs 로 익명 사용 통계를 보내지 않는다.
+  reportingEnabled: false
+
+  # Loki 와 같은 24시간. Spot 노드라 어차피 장기 보관은 의미가 없다.
+  retention: 24h
+
+  # 앱은 OTLP gRPC(4317) 하나만 쓴다. 아래는 그 수신기를 명시적으로 켜두는 것이고,
+  # 차트 기본값의 jaeger·opencensus 수신기는 그대로 남는다.
+  #
+  # 끄려고 `jaeger: null` 을 넣으면 차트가 렌더링 단계에서 깨진다. Service 템플릿
+  # (_ports.tpl)이 값 존재 여부를 확인하지 않고 jaeger 포트를 참조하기 때문이다.
+  # deprecated 차트라 고쳐질 가능성이 낮으니, 쓰지 않는 리스너 몇 개는 감수한다.
+  receivers:
+    otlp:
+      protocols:
+        grpc:
+          endpoint: "0.0.0.0:4317"
+
+  resources:
+    requests:
+      cpu: 20m
+      memory: 192Mi
+    limits:
+      cpu: 300m
+      memory: 384Mi
+
+# 트레이스는 emptyDir 에 쌓는다. PVC 를 하나 더 만들지 않는 대신
+# 노드가 교체되면(Spot 이라 흔하다) 그 전 트레이스는 사라진다. 학습 범위에서는 감수한다.
+persistence:
+  enabled: false
+
+# kube-prometheus-stack 의 ServiceMonitor 는 지금 필요 없다.
+serviceMonitor:
+  enabled: false
+
+# tempo-query(Jaeger UI)는 Grafana 로 조회하므로 띄우지 않는다.
+tempoQuery:
+  enabled: false

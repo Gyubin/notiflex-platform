@@ -11,6 +11,12 @@ from pathlib import Path
 import redis
 from aiokafka import AIOKafkaConsumer, AIOKafkaProducer
 from fastapi import FastAPI, HTTPException
+from opentelemetry import trace
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+from opentelemetry.sdk.resources import Resource
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel
 
@@ -130,9 +136,45 @@ def connect_to_valkey() -> redis.Redis:
     raise AssertionError("Valkey 연결 시도 횟수 계산 오류")
 
 
+def setup_tracing() -> TracerProvider | None:
+    """OTLP gRPC로 Tempo에 트레이스를 보내도록 TracerProvider를 등록한다.
+
+    Kafka와 같은 방침으로, 엔드포인트가 없으면 아무것도 등록하지 않는다.
+    로컬 실행과 테스트는 Tempo 없이 그대로 돌아간다.
+    """
+    endpoint = os.environ.get("OTEL_EXPORTER_OTLP_ENDPOINT")
+    if not endpoint:
+        logger.info("OTEL_EXPORTER_OTLP_ENDPOINT 미설정 — 트레이싱 비활성화 상태로 기동")
+        return None
+
+    provider = TracerProvider(
+        resource=Resource.create(
+            {
+                # Grafana Tempo의 Search가 이 이름으로 서비스를 묶는다.
+                "service.name": "notiflex-api",
+                # 테넌트는 별도 서비스가 아니라 같은 서비스의 네임스페이스로 표현한다.
+                # 두 테넌트를 한 화면에서 비교하면서도 구분할 수 있다.
+                "service.namespace": TENANT,
+                "service.version": os.environ.get("APP_VERSION", "dev"),
+            }
+        )
+    )
+    # Batch로 모아 보낸다. 요청마다 전송하면 응답 지연에 그대로 얹힌다.
+    provider.add_span_processor(
+        BatchSpanProcessor(OTLPSpanExporter(endpoint=endpoint, insecure=True))
+    )
+    trace.set_tracer_provider(provider)
+    logger.info("트레이싱 활성화: %s", endpoint)
+    return provider
+
+
+tracer = trace.get_tracer(__name__)
+
+
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
     global _valkey_client, _kafka_producer, _kafka_consumer_task
+    tracer_provider = setup_tracing()
     _valkey_client = connect_to_valkey()
 
     broker = os.environ.get("KAFKA_BROKER")
@@ -157,9 +199,16 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
             _kafka_producer = None
         _valkey_client.close()
         _valkey_client = None
+        if tracer_provider is not None:
+            # 아직 안 보낸 span을 비우고 내린다. 없으면 종료 직전 span이 유실된다.
+            tracer_provider.shutdown()
 
 
 app = FastAPI(lifespan=lifespan)
+
+# 모든 HTTP 요청에 자동으로 서버 span을 만든다. 핸들러마다 직접 만들 필요가 없다.
+# /health는 프로브가 5초마다 두드려서 트레이스를 뒤덮으므로 제외한다.
+FastAPIInstrumentor.instrument_app(app, excluded_urls="health,metrics")
 
 # Prometheus 계측: /metrics 엔드포인트로 HTTP 요청 수·지연 등을 노출한다.
 # 단일 uvicorn 워커 + 인메모리 레지스트리라 readOnlyRootFilesystem와 충돌하지 않는다.
@@ -213,14 +262,24 @@ def version() -> VersionResponse:
 async def get_id() -> IdResponse:
     if _valkey_client is None:
         raise HTTPException(status_code=503, detail="Valkey 연결이 준비되지 않았습니다")
-    # redis 클라이언트가 동기라 별도 스레드로 넘긴다. 이벤트 루프에서 직접 호출하면
-    # INCR이 끝날 때까지 다른 요청 처리가 멈춘다.
-    current_id = await asyncio.to_thread(_valkey_client.incr, "notiflex:id")
+    # ch8.2: 요청 안에서 Valkey 구간과 Kafka 구간을 나눠 span으로 남긴다.
+    # 자동 계측만으로는 요청 전체 시간만 보이고 어느 쪽이 느린지는 알 수 없다.
+    with tracer.start_as_current_span("valkey.incr") as span:
+        span.set_attribute("db.system", "redis")
+        span.set_attribute("db.operation", "INCR")
+        # redis 클라이언트가 동기라 별도 스레드로 넘긴다. 이벤트 루프에서 직접 호출하면
+        # INCR이 끝날 때까지 다른 요청 처리가 멈춘다.
+        current_id = await asyncio.to_thread(_valkey_client.incr, "notiflex:id")
+
     pod_name = os.environ.get("POD_NAME", "local")
 
     # ch8.1: ID 발급까지만 동기로 끝내고, 실제 알림 처리는 이벤트로 넘긴다.
     event = {"id": current_id, "tenant": TENANT, "pod": pod_name}
-    await publish_notification(event)
+    with tracer.start_as_current_span("kafka.publish") as span:
+        span.set_attribute("messaging.system", "kafka")
+        span.set_attribute("messaging.destination.name", NOTIFICATIONS_TOPIC)
+        span.set_attribute("notiflex.tenant", TENANT)
+        await publish_notification(event)
 
     return IdResponse(
         id=current_id,

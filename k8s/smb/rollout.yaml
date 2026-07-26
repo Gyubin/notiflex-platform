@@ -40,6 +40,9 @@ spec:
             # 메시지 키와 Consumer Group 이름에 쓰인다. 테넌트마다 달라야 한다.
             - name: TENANT
               value: smb
+            # ch8.2: 트레이스 수집 포트(4317). Grafana가 조회할 때 쓰는 3200과는 다르다.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://tempo.monitoring.svc.cluster.local:4317
           volumeMounts:
             - name: secrets-store
               mountPath: /mnt/secrets

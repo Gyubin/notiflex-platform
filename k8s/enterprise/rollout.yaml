@@ -42,6 +42,9 @@ spec:
               value: notiflex-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092
             - name: TENANT
               value: enterprise
+            # ch8.2: smb 와 같은 Tempo 로 보내고, 트레이스는 service.namespace 로 갈린다.
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: http://tempo.monitoring.svc.cluster.local:4317
           volumeMounts:
             - name: secrets-store
               mountPath: /mnt/secrets

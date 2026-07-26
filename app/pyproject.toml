@@ -8,6 +8,9 @@ dependencies = [
     "prometheus-fastapi-instrumentator==7.1.0",
     "redis==7.0.0",
     "aiokafka==0.13.0",
+    "opentelemetry-sdk==1.39.0",
+    "opentelemetry-exporter-otlp-proto-grpc==1.39.0",
+    "opentelemetry-instrumentation-fastapi==0.60b0",
 ]
 
 [dependency-groups]

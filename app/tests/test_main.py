@@ -113,6 +113,12 @@ def test_notifications_reports_consumed_state(monkeypatch):
     assert body["tenant"] == main.TENANT
 
 
+def test_setup_tracing_is_skipped_without_endpoint(monkeypatch):
+    # Tempo 주소가 없으면 TracerProvider를 등록하지 않아야 로컬 실행이 막히지 않는다.
+    monkeypatch.delenv("OTEL_EXPORTER_OTLP_ENDPOINT", raising=False)
+    assert main.setup_tracing() is None
+
+
 def test_metrics_endpoint_exposes_prometheus_format():
     # 한 번 요청을 발생시켜 카운터가 증가하도록 한 뒤 /metrics를 조회한다.
     client.get("/health")
