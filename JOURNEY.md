@@ -74,7 +74,7 @@
 | Python | 3.13 | 2026-07-12 로컬 uv 전환하며 이미지(python:3.13-slim)에 맞춰 3.14→3.13 정합 |
 | FastAPI | 0.139.0 | |
 | uvicorn | 0.50.0 | |
-| Notiflex 이미지 | v0.3.1 | 2026-07-20 v0.2.3: Canary 실배포 검증용 불변 태그. 2026-07-27 v0.3.0: aiokafka Producer/Consumer 추가, `/id` 응답에 `tenant`·`published` 필드와 `/notifications` 엔드포인트 신설. 2026-07-27 v0.3.1: `logging.basicConfig` 누락으로 앱 자체 로그가 전부 유실되던 문제 수정 |
+| Notiflex 이미지 | v0.4.0 | 2026-07-20 v0.2.3: Canary 실배포 검증용 불변 태그. 2026-07-27 v0.3.0: aiokafka Producer/Consumer 추가, `/id` 응답에 `tenant`·`published` 필드와 `/notifications` 엔드포인트 신설. 2026-07-27 v0.3.1: `logging.basicConfig` 누락으로 앱 자체 로그가 전부 유실되던 문제 수정. 2026-07-27 v0.4.0: OTel 계측 추가(`valkey.incr`·`kafka.publish` span). ch8.1부터 CI가 smb·enterprise 두 Rollout을 함께 갱신 |
 | ArgoCD | v3.4.5 | 2026-07-12 설치 (stable manifest) |
 | Argo Rollouts | v1.9.1 | 2026-07-20 Blue/Green에서 Canary로 전환. stable Service `notiflex-api`, canary Service `notiflex-api-preview`, setWeight 20/50/80과 각 30초 pause |
 | kube-prometheus-stack | 87.15.1 (Helm) | 2026-07-12 설치. Prometheus v3.13.1, Grafana 13.1.0, operator v0.92.1 |
@@ -97,6 +97,8 @@
 | ops-pool (ch7.2) | e2-small (Spot), pd-standard 50GB | 1 | Tempo (ch8.2), 헬스체크 CronJob (ch8.3). allocatable이 940m/1391Mi뿐이라 DaemonSet만으로 이미 CPU 56%·메모리 75%가 예약된 상태. 여기에 워크로드를 더 얹을 때는 반드시 requests를 먼저 확인한다 |
 
 모든 노드풀에 `--workload-metadata=GKE_METADATA`를 지정해 ch6.2의 Workload Identity(Secret Manager 접근)가 새 노드에서도 동작한다. 신규 풀은 `pd-standard`(HDD) 50GB로 만들어 리전 SSD 쿼터(300GB)를 소비하지 않는다.
+
+ch8 이후 클러스터에는 `kafka` 네임스페이스(Strimzi operator + 브로커 + entity-operator)와 `monitoring`의 Tempo, `notiflex`의 헬스체크 CronJob이 추가됐다. ArgoCD Application은 `root-app`, `notiflex-smb`, `notiflex-enterprise`, `notiflex-monitoring`, `notiflex-kafka` 5개다.
 
 > **운영 주의**: 현재 5노드로 가동 중이며 `notiflex-smb` auto-sync가 켜져 있다. 중단할 때는 auto-sync 비활성화 → Rollout replica 0 → 노드 풀 0 순서를 지킨다 (AGENTS.md "Paused Cluster" 참조). 재개 시에는 노드 풀 복구 후 auto-sync 재활성화와 hard refresh가 필요하다. api-pool은 노드가 1개이므로 그 노드를 드레인해야 할 때는 `notiflex-api` PDB의 `minAvailable`을 임시로 0으로 낮춘다.
 

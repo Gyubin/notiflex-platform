@@ -22,9 +22,12 @@ Keep textbook discussions and completion reports in Korean.
 - **Project name**: `gyubin-gitaiops-project`
 - **Region / zone**: `asia-northeast3` / `asia-northeast3-a`
 - **Artifact Registry**: `asia-northeast3-docker.pkg.dev/project-b3c5c78c-8a5c-4e47-9fe/notiflex-platform`
-- **Cluster**: `notiflex-cluster`, four Spot node pools — `default-pool` (e2-medium ×2, pd-balanced 30 GB) for the shared platform, `api-pool` (e2-medium ×1) for `notiflex-api`, `worker-pool` (e2-standard-2 ×1) for ch8 Kafka, and `ops-pool` (e2-small ×1) for ch8 CronJobs. Every pool sets `--workload-metadata=GKE_METADATA`; the ch7 pools use `pd-standard` 50 GB disks to stay off the regional SSD quota
+- **Cluster**: `notiflex-cluster`, four Spot node pools — `default-pool` (e2-medium ×2, pd-balanced 30 GB) for the shared platform, `api-pool` (e2-medium ×1) for `notiflex-api`, `worker-pool` (e2-standard-2 ×1) for Kafka, and `ops-pool` (e2-small ×1) for Tempo and CronJobs. Every pool sets `--workload-metadata=GKE_METADATA`; the ch7 pools use `pd-standard` 50 GB disks to stay off the regional SSD quota
 - **kubectl context**: `notiflex-gke`
 - **Application namespace**: `notiflex`
+- **`ops-pool` is nearly full.** It is an e2-small with 940m CPU and 1391Mi allocatable, and the
+  system DaemonSets alone reserve 56% of the CPU and 75% of the memory. Check `kubectl top` and the
+  node's `Allocated resources` before scheduling anything else there.
 - **Gateway API**: enabled on the standard channel
 
 The GKE kubeconfig is separated from the company EKS configuration: personal GKE data lives in
@@ -37,8 +40,13 @@ repository.
 - `app/`: Python source, tests, Dockerfile, `pyproject.toml`, and `uv.lock`
 - `k8s/smb/`: SMB tenant — Rollout, traffic, monitoring-discovery, and secret-mount manifests
 - `k8s/enterprise/`: Enterprise tenant — Rollout, Service, ServiceAccount, and SecretProviderClass
+- `k8s/kafka/`: Strimzi `Kafka`, `KafkaNodePool`, and `KafkaTopic` custom resources
 - `k8s/monitoring/`: Grafana datasource/dashboard ConfigMaps and the PrometheusRule
-- `helm-values/`: Helm values for kube-prometheus-stack, Loki, Fluent Bit, and Valkey
+- `helm-values/`: Helm values for kube-prometheus-stack, Loki, Fluent Bit, Valkey, Strimzi, and Tempo
+- `command-guardrails/`: step-by-step procedures for the operations that are hard to undo — deleting
+  a Kafka topic, running a CronJob by hand, removing a tenant namespace. Read the matching file
+  before performing one of these, and add a file in the same three-part shape when a new hazardous
+  operation appears. These are permanent; do not delete them after use.
 - `.github/workflows/`: CI pipeline
 - `argocd/root-app.yaml`: the App of Apps root; apply it by hand, and it manages everything else
 - `argocd/apps/`: one Application per managed path. Adding a file here is how a new app is
@@ -144,6 +152,29 @@ gcloud container clusters resize notiflex-cluster --node-pool default-pool \
   `valkey-primary.notiflex.svc.cluster.local:6379`. The namespaces separate compute, not data —
   every tenant currently shares one `/id` counter. Per-tenant key prefixes or separate instances
   are still open work.
+- Kafka is shared the same way. Tenants publish to one `notifications` topic under their own consumer
+  group, so a tenant reads its own messages *and* everyone else's — measured, not assumed. The tenant
+  travels in the message key and payload, which distinguishes senders but isolates nothing. Real
+  isolation needs per-tenant topics or Kafka ACLs.
+- Keying by tenant name also pins a tenant's messages to one partition, so extra replicas do not add
+  parallelism within a tenant. That is the price of per-tenant ordering.
+- Both tenants run the same image, and CI bumps both rollout manifests on release. Deploying tenants
+  at different versions means splitting that step in `.github/workflows/ci.yaml` first.
+
+## Messaging and Scheduled Work
+
+- Kafka runs in the `kafka` namespace: the Strimzi operator (Helm, `helm-values/strimzi.yaml`) plus a
+  single KRaft broker declared in `k8s/kafka/` and synced by the `notiflex-kafka` Application. The
+  broker doubles as controller. Reach it at
+  `notiflex-kafka-kafka-bootstrap.kafka.svc.cluster.local:9092`.
+- Strimzi's pod template has no `nodeSelector` field. Pin its pods with `nodeAffinity` on the same
+  `cloud.google.com/gke-nodepool` label the other manifests use.
+- Only the Kafka versions listed in the operator's `STRIMZI_KAFKA_IMAGES` will start. Check that list
+  before changing `spec.kafka.version`; an unsupported value fails the cluster, it does not warn.
+- `/id` publishes an event and a consumer in the same pod reads it back. Both are optional: without
+  `KAFKA_BROKER` the app starts with messaging off, which is how the tests and local runs work.
+- `notiflex-healthcheck` (`k8s/smb/healthcheck-cronjob.yaml`) curls `/health` through the Service DNS
+  name every five minutes from `ops-pool`. The Service listens on 8080, not 80.
 
 ## Observability
 
@@ -154,6 +185,13 @@ gcloud container clusters resize notiflex-cluster --node-pool default-pool \
   `k8s/smb/servicemonitor.yaml` (`release: kube-prometheus`). Loki runs as SingleBinary and Fluent Bit
   runs as a DaemonSet; Grafana has a non-default Loki datasource and LogQL uses `{namespace="notiflex"}`.
   The `pod-restart-alert` PrometheusRule routes only to the default null Alertmanager receiver.
+- Tempo (Helm, `helm-values/tempo.yaml`) collects traces over OTLP gRPC on 4317 and is queried over
+  HTTP on 3200; those two ports are easy to mix up. Its Grafana datasource is
+  `k8s/monitoring/tempo-datasource.yaml` with `uid: tempo` pinned, because dashboards reference
+  datasources by uid and an unpinned one is regenerated on every reprovision. Exactly one datasource
+  may carry `isDefault: true`, and Prometheus already does — a second one crashes Grafana at startup.
+- The app traces every request except `/health` and `/metrics`. Probe traffic would otherwise bury
+  real requests in Tempo's search results. Traces carry the tenant in `service.namespace`.
 - Access Grafana with:
 
   ```bash

@@ -104,3 +104,29 @@
 - App of Apps와 자연스럽게 결합되어 테넌트 추가가 Application YAML 한 개로 끝난다.
 - 테넌트별로 배포 시점과 버전을 독립적으로 가져갈 수 있다.
 - 격리 대상은 컴퓨트이며 Valkey는 여전히 공유한다. 데이터 격리는 이후 과제로 남긴다.
+
+## ADR-014: 비동기 처리는 Kafka와 Strimzi (8장)
+**시점**: 2026-07 / **결정**: 알림 이벤트를 Kafka `notifications` 토픽으로 넘기고, Strimzi Operator가 KRaft 모드 단일 브로커를 관리한다. RabbitMQ, NATS, Valkey Streams는 사용하지 않는다. 앱 쪽 클라이언트는 aiokafka를 쓴다.
+**이유**:
+- 요청 수신과 실제 처리를 분리해, 처리가 늦어져도 API 응답 시간이 끌려가지 않는다.
+- Strimzi가 클러스터와 토픽을 CRD로 노출하므로 매니페스트 그대로 ArgoCD가 관리한다.
+- KRaft 모드는 ZooKeeper가 없어 단일 브로커가 e2-standard-2 한 대에 들어간다.
+- FastAPI가 asyncio 기반이라 aiokafka의 Consumer를 lifespan 백그라운드 태스크로 그대로 띄울 수 있다.
+- 토픽은 테넌트가 공유한다. Consumer Group만 나눈 상태라 서로의 메시지가 보이며, 격리는 이후 과제로 남긴다.
+
+## ADR-015: 분산 트레이싱은 Tempo와 OpenTelemetry (8장)
+**시점**: 2026-07 / **결정**: 트레이스를 OTLP gRPC로 Grafana Tempo에 보낸다. Jaeger, Zipkin은 사용하지 않는다.
+**이유**:
+- 이미 쓰는 Grafana에서 메트릭·로그와 같은 화면으로 트레이스까지 조회한다.
+- 인덱스를 따로 두지 않아 Jaeger의 Elasticsearch 백엔드보다 훨씬 가볍고 e2-small 노드에 들어간다.
+- OpenTelemetry SDK를 쓰므로 나중에 백엔드를 바꿔도 앱 계측 코드는 그대로 둔다.
+- 자동 계측 위에 Valkey·Kafka 구간 span을 얹어 요청 안에서 어디가 느린지 나눠 본다.
+- 트레이스 ID 조회 위주라 복잡한 속성 검색은 Jaeger보다 약하다는 점은 감수한다.
+
+## ADR-016: 주기 작업은 Kubernetes CronJob (8장)
+**시점**: 2026-07 / **결정**: 헬스체크 같은 주기 작업을 Kubernetes CronJob으로 실행한다. 클러스터 외부 cron과 Argo Workflows는 사용하지 않는다.
+**이유**:
+- 추가 설치 없이 쓸 수 있고, 매니페스트 한 장이라 ArgoCD가 다른 리소스와 똑같이 관리한다.
+- 스케줄 변경이 코드 리뷰와 git 히스토리에 그대로 남는다.
+- ops-pool에 배치해 API 노드의 리소스를 건드리지 않는다.
+- Argo Workflows는 의존성 있는 다단계 파이프라인용이라 단일 헬스체크에는 과하다.
